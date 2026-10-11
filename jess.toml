@@ -1,0 +1,21 @@
+manifest_version = 1
+
+[package]
+id = "org.dreamweave.add-vanilla-refs"
+version = "0.1.0"
+jess_api = "1"
+include = ["src"]
+
+[dependencies]
+"org.dreamweave.tes3conv" = "0.1"
+
+[modules]
+"@add-vanilla-refs" = "src/init.luau"
+
+# The module is inert API: it does nothing until something requires it, and it never touches the
+# filesystem. Callers hand it record lists and get a record list and a log back.
+
+[[layer]]
+id = "add-vanilla-refs.core"
+requires = ["tes3conv.core"]
+exports = ["@add-vanilla-refs"]
