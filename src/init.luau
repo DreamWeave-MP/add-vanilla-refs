@@ -1018,12 +1018,13 @@ local function sanitizePackageCells(state: State)
     for position, package in packages do
       local ai = package :: Table
 
-      if (ai.type == 'Escort' or ai.type == 'Follow') and not state.defined[lower(ai.cell)] then
-        copied = copied or table.clone(packages)
-        local fixed = table.clone(ai)
-        fixed.cell = 'igtestcell'
-        (copied :: { Value })[position] = fixed
-      end
+      if ai.type ~= 'Escort' and ai.type ~= 'Follow' then continue end
+      if state.defined[lower(ai.cell)] then continue end
+
+      copied = copied or table.clone(packages)
+      local fixed = table.clone(ai)
+      fixed.cell = 'igtestcell'
+      (copied :: { Value })[position] = fixed
     end
 
     if copied then
