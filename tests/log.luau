@@ -213,6 +213,7 @@ suite.describe('log', function()
       head = 'h_head',
       hair = 'i_hair',
     })
+
     local _, log = addVanillaRefs.run({ header(), actor }, {
       {
         header(),
@@ -250,6 +251,7 @@ suite.describe('log', function()
       reference(1, 'Chair', { owner = 'Owner_Npc' }),
       reference(2, 'Chest', { ownerFaction = 'Guild', key = 'chest_key', trap = 'chest_trap' }),
     })
+
     local result, log = addVanillaRefs.run({ header(), hall }, {
       {
         header(),
@@ -294,6 +296,7 @@ suite.describe('log', function()
       class = 'Scout',
       aiPackages = { { type = 'Follow', target = 'vanilla_guide', cell = '' } },
     })
+
     local _, log = addVanillaRefs.run(
       {
         header(),
@@ -374,6 +377,7 @@ suite.describe('log', function()
     expect(lines(log, 'Info imported')).toEqual {
       'Info imported as a line spoken by vanilla_speaker',
     }
+
     expect(lines(log, '  ')).toEqual {
       '  pass=post-dialogue',
       '  target=MISC \'vanilla_speaker\'',
@@ -388,6 +392,7 @@ suite.describe('records', function()
     local actor = typed('Npc', 'root', {
       aiPackages = { { type = 'Escort', target = 'escort_target', cell = '' } },
     })
+
     local plugin = {
       header { { 'Morrowind.esm', 79837557 } },
       actor,
