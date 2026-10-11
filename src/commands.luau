@@ -1,0 +1,202 @@
+--!strict
+--!native
+--[[
+@add-vanilla-refs/commands: what addVanillaRefs does between starting and printing, over plugin
+files.
+
+  run(request) -> result
+
+`run` takes one request, a table of plain data, and returns one result, a table of plain data:
+everything a person at a terminal would have been shown, and nothing worded or laid out for one.
+addVanillaRefs takes no arguments: it reads Starwind.esp, and Bloodmoon.esm, Tribunal.esm, and
+Morrowind.esm, from the folder it is run in, and writes Starwind.esp over the one it read. The
+request names the same files, so a caller can point it anywhere: each one it leaves out is
+addVanillaRefs's, in the request's `folder`.
+
+It opens the plugin and the masters, calls @add-vanilla-refs, and writes the result as
+addVanillaRefs does: over the plugin (or to `output`), with no backup, the header counting its
+records as tes3 writes it. The masters' file names are the names the log has for them. Of a
+master, the cells, landscape, and path grids are never read: addVanillaRefs copies none of them.
+
+Nothing here reads an argument list, the environment, or standard input, and nothing prints: the
+log addVanillaRefs prints is the result's `log`, line by line. Files that aren't there are named
+in the result's `missing`, and nothing is read or written then. A request that can't be carried
+out at all raises its reason as a string: a file left out with no `folder` to look in, a file
+that can't be read as a plugin. With `dryRun`, everything is read and the log and counts are as a
+run's, and nothing is written.
+
+Each file's records are read as @tes3conv reads them and taken in the file's own order, as
+addVanillaRefs takes them: which of a master's records comes first decides which one of an id is
+copied, and the order the masters' game settings, magic effects, races, and classes are added
+in. The port's differences from addVanillaRefs are @add-vanilla-refs's.
+]]
+
+local addVanillaRefs = require '@add-vanilla-refs'
+local core = require '@tes3'
+local fs = require '@dream/fs'
+local tes3 = require '@tes3conv/records'
+local tes3conv = require '@tes3conv'
+
+type Records = tes3.Records
+
+export type RunRequest = {
+  --- The folder each file left out below is looked for in, under addVanillaRefs's name for it.
+  folder: string?,
+  --- The plugin to make stand alone; Starwind.esp without one.
+  plugin: string?,
+  --- Its masters, in the order a record is looked up in them; Bloodmoon.esm, Tribunal.esm, and
+  --- Morrowind.esm without them.
+  masters: { string }?,
+  --- The file to write; the plugin itself without one, as addVanillaRefs writes it.
+  output: string?,
+  --- Read everything and report, and write nothing.
+  dryRun: boolean?,
+}
+
+--- A master: the name the log has for it, its file's, and the file.
+export type Master = { name: string, path: string }
+
+--- Records, headers aside: the plugin's as it was read, and the output's.
+export type RecordCounts = { plugin: number, output: number }
+
+export type RunResult = {
+  command: 'run',
+  plugin: string,
+  --- The masters, in lookup order.
+  masters: { Master },
+  --- The file written, or with `dryRun` the one that would have been.
+  output: string,
+  dryRun: boolean,
+  written: boolean,
+  --- The plugin and the masters that aren't files. With any, nothing was read or written.
+  missing: { string },
+  --- addVanillaRefs's standard output, line by line. The Starwind build keeps it as
+  --- decoupleLog.txt, and its validators read it.
+  log: { string },
+  --- Nil when files were missing.
+  records: RecordCounts?,
+}
+
+local commands = {}
+
+-- The files addVanillaRefs has fixed in its source: the plugin, and the masters in the order it
+-- looks a record up in them.
+commands.Plugin = 'Starwind.esp'
+commands.Masters = table.freeze { 'Bloodmoon.esm', 'Tribunal.esm', 'Morrowind.esm' }
+
+--- Of a master, what addVanillaRefs can copy or read dialogue from: everything but the cells,
+--- landscape, and path grids, which are most of one.
+local function copyable(tag: string): core.Keep
+  return if tag == 'CELL' or tag == 'LAND' or tag == 'PGRD' then 'skip' else 'whole'
+end
+
+--- A plugin file's records in the file's order. @tes3conv reads a plugin's records only sorted
+--- as tes3conv writes them, with each one's bytes beside it, so each is put back where the file
+--- has those bytes; records of the same bytes are the same record, and go in the order they
+--- come.
+local function records(path: string, keep: ((tag: string) -> core.Keep)?): Records
+  local bytes = jess.fs.readBuffer(path)
+
+  if not bytes then error(`'{path}' can't be read`, 0) end
+
+  local plugin = core.open(bytes, { keep = keep })
+  local sorted, sortedBytes = tes3conv.recordsWithBytes(plugin)
+  local places: { [string]: { number } } = {}
+
+  for position, written in sortedBytes do
+    local queue = places[written]
+
+    if not queue then
+      queue = {}
+      places[written] = queue
+    end
+
+    table.insert(queue, position)
+  end
+
+  local ordered: Records = table.create(#sorted)
+  local taken: { [string]: number } = {}
+
+  for index = 0, plugin:count() - 1 do
+    local written = buffer.tostring(plugin:bytes(index))
+    local nth = (taken[written] or 0) + 1
+    local position = places[written][nth]
+    taken[written] = nth
+    ordered[index + 1] = sorted[position]
+  end
+
+  return ordered
+end
+
+--- The file a request names, or addVanillaRefs's own in the request's folder.
+local function named(request: RunRequest, path: string?, name: string): string
+  if path then return path end
+
+  if not request.folder then
+    error(`the request names neither '{name}' nor a folder to find it in`, 0)
+  end
+
+  return jess.fs.join(request.folder, name)
+end
+
+function commands.run(request: RunRequest): RunResult
+  local plugin = named(request, request.plugin, commands.Plugin)
+  local masters: { Master } = {}
+
+  if request.masters then
+    for _, path in request.masters do
+      table.insert(masters, { name = jess.fs.fileName(path) or path, path = path })
+    end
+  else
+    for _, name in commands.Masters do
+      table.insert(masters, { name = name, path = named(request, nil, name) })
+    end
+  end
+
+  local result: RunResult = {
+    command = 'run',
+    plugin = plugin,
+    masters = masters,
+    output = request.output or plugin,
+    dryRun = request.dryRun == true,
+    written = false,
+    missing = {},
+    log = {},
+  }
+
+  if not jess.fs.isFile(plugin) then table.insert(result.missing, plugin) end
+
+  for _, master in masters do
+    if not jess.fs.isFile(master.path) then table.insert(result.missing, master.path) end
+  end
+
+  if #result.missing > 0 then return result end
+
+  local source = records(plugin)
+  local bases: { Records }, names: { string } = {}, {}
+
+  for _, master in masters do
+    table.insert(bases, records(master.path, copyable))
+    table.insert(names, master.name)
+  end
+
+  local decoupled, log = addVanillaRefs.run(source, bases, { names = names })
+  local built = tes3conv.plugin(decoupled)
+  -- tes3 counts the records into the header as it saves.
+  built:updateRecordCount()
+  local data = built:save()
+  result.log = log
+  result.records = { plugin = #source - 1, output = #decoupled - 1 }
+
+  if result.dryRun then return result end
+
+  -- addVanillaRefs writes over the plugin in place, in a folder that is there.
+  local wrote, failure = fs.writeFile(result.output, data)
+
+  if not wrote then error(failure or `'{result.output}' can't be written`, 0) end
+
+  result.written = true
+  return result
+end
+
+return table.freeze(commands)

@@ -1,0 +1,221 @@
+--!strict
+-- What the command suites share: a Starwind.esp and its three Bethesda masters, small enough to
+-- read, written as plugin files into a folder of the scratch root that each case has to itself;
+-- and what addVanillaRefs itself made of those four files, kept in `golden`.
+local core = require '@tes3'
+local fs = require '@dream/fs'
+local tes3conv = require '@tes3conv'
+
+export type Record = { [string | number]: any }
+
+local support = {}
+
+--- The package's tests folder, from this file's chunk name: `jess package test` runs the suite
+--- from whatever folder it was called in.
+local function tests(): string
+  local source = debug.info(1, 's')
+  local first = string.sub(source, 1, 1)
+  local path = if first == '@' or first == '=' then string.sub(source, 2) else source
+
+  return string.match(path, '^(.*)/[^/]*$') or '.'
+end
+
+--- A file addVanillaRefs wrote when it was run on `support.sources`' four files: `Starwind.esp`,
+--- the plugin it left, and `decoupleLog.txt`, what it printed.
+function support.golden(name: string): string
+  local path = jess.fs.join(tests(), 'golden', name)
+  local bytes = assert(jess.fs.read(path), `'{path}' isn't there`)
+  return bytes
+end
+
+--- An empty folder `name` under the scratch root. The suite runs once from the source and once
+--- from the packed package, so what the run before left there is removed first.
+function support.folder(name: string): string
+  local scratch =
+    assert(rawget(_G, 'scratchRoot') :: string?, 'the suite needs a host-owned scratchRoot')
+  local path = jess.fs.join(scratch, name)
+
+  if jess.fs.exists(path) then assert(fs.remove(path, { recursive = true })) end
+
+  jess.fs.createDir(path)
+  return path
+end
+
+--- A record of a type with every field it has, `fields` over the type's defaults: what the
+--- plugin encoder needs of one.
+function support.full(kind: string, fields: Record): Record
+  local record = assert(core.default(kind), `no record type {kind}`) :: Record
+
+  for key, value in fields do
+    record[key] = value
+  end
+
+  return record
+end
+
+local full = support.full
+
+function support.header(masters: { { string | number } }?, fileType: string?): Record
+  return full('Header', {
+    version = string.unpack('<f', string.pack('<f', 1.3)),
+    fileType = fileType or 'Esm',
+    masters = masters or {},
+  })
+end
+
+function support.misc(id: string, script: string?): Record
+  return full('MiscItem', { id = id, name = id, script = script or '', mesh = 'm.nif', icon = 'i.dds' })
+end
+
+function support.dial(id: string, kind: string?): Record
+  return full('Dialogue', { id = id, dialogueType = kind or 'Topic' })
+end
+
+function support.info(id: string, prev: string, next: string, fields: Record?): Record
+  local record = full('DialogueInfo', { id = id, prevId = prev, nextId = next, text = `says {id}` })
+
+  for key, value in fields or {} do
+    record[key] = value
+  end
+
+  return record
+end
+
+function support.reference(index: number, id: string): Record
+  return {
+    mastIndex = 0,
+    refrIndex = index,
+    id = id,
+    temporary = true,
+    translation = { 0, 0, 0 },
+    rotation = { 0, 0, 0 },
+  }
+end
+
+--- Writes `records` as the plugin file at `path`, in the order given, its header counting them
+--- as tes3 counts them when it saves.
+function support.write(path: string, records: { Record })
+  local plugin = tes3conv.plugin(records)
+  plugin:updateRecordCount()
+  jess.fs.write(path, plugin:save(), { backup = false })
+end
+
+--- A plugin file's records, as `@tes3conv` reads them.
+function support.read(path: string): { Record }
+  local bytes = assert(jess.fs.readBuffer(path), `'{path}' isn't there`)
+  return tes3conv.records(core.open(bytes))
+end
+
+--- A file's bytes, as a string two of which compare.
+function support.bytes(path: string): string
+  local bytes = assert(jess.fs.read(path), `'{path}' isn't there`)
+  return bytes
+end
+
+--- A text's lines, without the newline that ends the last.
+function support.lines(text: string): { string }
+  local lines = string.split(text, '\n')
+
+  if lines[#lines] == '' then table.remove(lines) end
+
+  return lines
+end
+
+--- The records of the four files, by addVanillaRefs's names for them. Morrowind has what the
+--- others need and dialogue of its own; Tribunal overrides one of its items and adds to a topic;
+--- Bloodmoon has an item and a deleted static; Starwind has a chest, an NPC, a cell, and
+--- dialogue that need them.
+function support.records(): { [string]: { Record } }
+  local misc, dial, info = support.misc, support.dial, support.info
+
+  return {
+    ['Morrowind.esm'] = {
+      support.header(),
+      full('GameSetting', { id = 'sName', value = { type = 'String', data = 'Name' } }),
+      full('GameSetting', { id = 'fJump', value = { type = 'Float', data = 1.5 } }),
+      full('Script', { id = 'vanilla_script', text = 'begin vanilla_script\nend' }),
+      full('Static', { id = 'vanilla_rock', mesh = 'rock.nif' }),
+      full('Static', { id = 'unused_rock', mesh = 'rock2.nif' }),
+      misc('shared_item', 'vanilla_script'),
+      full('Class', { id = 'Guard', name = 'Guard' }),
+      full('Race', { id = 'Dark Elf', name = 'Dark Elf', spells = { 'vanilla_spell' } }),
+      full('Spell', { id = 'vanilla_spell', name = 'Spell' }),
+      full('Npc', { id = 'vanilla_guard', name = 'Guard', race = 'Dark Elf', class = 'Guard' }),
+      dial 'Background',
+      info('M1', '', 'M2', { speakerId = 'sw_npc' }),
+      info('M2', 'M1', 'M3', { speakerId = 'vanilla_guard' }),
+      info('M3', 'M2', '', { speakerRace = 'Dark Elf' }),
+      dial('Greeting 0', 'Greeting'),
+      info('G1', '', '', { speakerClass = 'Guard' }),
+    },
+    ['Tribunal.esm'] = {
+      support.header { { 'Morrowind.esm', 1 } },
+      misc('shared_item', 'tribunal_script'),
+      full('Script', { id = 'tribunal_script', text = 'begin tribunal_script\nend' }),
+      misc 'tribunal_only',
+      dial 'Background',
+      info('T1', 'M1', 'M2', { speakerId = 'sw_npc' }),
+    },
+    ['Bloodmoon.esm'] = {
+      support.header { { 'Morrowind.esm', 1 } },
+      misc 'bloodmoon_item',
+      full('Static', { id = 'deleted_static', mesh = 'x.nif', flags = 'DELETED' }),
+    },
+    ['Starwind.esp'] = {
+      support.header(
+        { { 'Morrowind.esm', 1 }, { 'Tribunal.esm', 1 }, { 'Bloodmoon.esm', 1 } },
+        'Esp'
+      ),
+      misc('sw_root', 'vanilla_script'),
+      misc 'sw_holder',
+      full('Container', {
+        id = 'sw_chest',
+        name = 'Chest',
+        mesh = 'c.nif',
+        inventory = { { 1, 'shared_item' }, { 2, 'bloodmoon_item' } },
+      }),
+      full('Npc', {
+        id = 'sw_npc',
+        name = 'Pilot',
+        race = 'Dark Elf',
+        class = 'Guard',
+        aiPackages = {
+          {
+            type = 'Follow',
+            target = 'sw_root',
+            cell = 'nowhere',
+            duration = 0,
+            location = { 0, 0, 0 },
+            reset = 0,
+          },
+        },
+      }),
+      full('Static', { id = 'sw_gone', mesh = 'g.nif', flags = 'DELETED' }),
+      full('Cell', {
+        name = 'Hangar',
+        data = { flags = 'IS_INTERIOR', grid = { 0, 0 } },
+        references = { support.reference(1, 'vanilla_rock'), support.reference(2, 'sw_npc') },
+      }),
+      dial 'Background',
+      info('S1', 'M2', 'M3', { speakerId = 'sw_npc' }),
+      dial 'Starships',
+      info('S2', '', ''),
+    },
+  }
+end
+
+--- The four files in `folder`, each named `names[its name]` when that is given; returns each
+--- file's path by addVanillaRefs's name for it.
+function support.sources(folder: string, names: { [string]: string }?): { [string]: string }
+  local paths = {}
+
+  for name, records in support.records() do
+    local path = jess.fs.join(folder, names and names[name] or name)
+    support.write(path, records)
+    paths[name] = path
+  end
+
+  return paths
+end
+
+return support

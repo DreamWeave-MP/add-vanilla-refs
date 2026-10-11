@@ -1,0 +1,252 @@
+--!strict
+--!native
+-- `@add-vanilla-refs/commands`: a run on four plugin files, as a request handed over and a result
+-- looked at, against what addVanillaRefs itself wrote and printed on the same four
+-- (`golden/Starwind.esp`, `golden/decoupleLog.txt`). Nothing is captured, because nothing
+-- prints: the log is in the table the command returns.
+local bytes = require '@dream/bytes'
+local commands = require '@add-vanilla-refs/commands'
+local support = require './support'
+local test = require '@jess/test'
+
+local expect = test.expect
+local suite = test.new()
+
+local Plugin = 'Starwind.esp'
+local Masters = { 'Bloodmoon.esm', 'Tribunal.esm', 'Morrowind.esm' }
+
+--- Whether the file at `path` holds exactly `wanted`: its length and digest say so without
+--- handing bytes to `expect`.
+local function holds(path: string, wanted: string): boolean
+  local found = support.bytes(path)
+  return #found == #wanted and bytes.sha256(found) == bytes.sha256(wanted)
+end
+
+--- The log's lines that start with `prefix`, in order.
+local function starting(log: { string }, prefix: string): { string }
+  local found = {}
+
+  for _, line in log do
+    if string.sub(line, 1, #prefix) == prefix then table.insert(found, line) end
+  end
+
+  return found
+end
+
+suite.describe('run', function()
+  suite.it('names addVanillaRefs\'s own files, the masters in the order it looks a record up', function()
+    expect(commands.Plugin).toBe(Plugin)
+    expect(commands.Masters).toEqual(Masters)
+  end)
+
+  suite.it('writes over the plugin what addVanillaRefs writes, and returns what it prints', function()
+    local folder = support.folder 'commands-run'
+    local paths = support.sources(folder)
+    local result = commands.run { folder = folder }
+
+    expect(result.command).toBe 'run'
+    expect(result.plugin).toBe(paths[Plugin])
+    expect(result.output).toBe(paths[Plugin])
+    expect(result.dryRun).toBe(false)
+    expect(result.written).toBe(true)
+    expect(result.missing).toEqual {}
+    expect(result.masters).toEqual {
+      { name = 'Bloodmoon.esm', path = paths['Bloodmoon.esm'] },
+      { name = 'Tribunal.esm', path = paths['Tribunal.esm'] },
+      { name = 'Morrowind.esm', path = paths['Morrowind.esm'] },
+    }
+    expect(result.records).toEqual { plugin = 10, output = 24 }
+    expect(result.log).toEqual(support.lines(support.golden 'decoupleLog.txt'))
+    expect(holds(paths[Plugin], support.golden 'Starwind.esp')).toBe(true)
+  end)
+
+  suite.it('leaves the plugin without masters, its header counting its records', function()
+    local folder = support.folder 'commands-header'
+    local paths = support.sources(folder)
+    commands.run { folder = folder }
+
+    local written = support.read(paths[Plugin])
+    expect(written[1].masters).toEqual {}
+    expect(written[1].numObjects).toBe(24)
+    expect(#written).toBe(25)
+  end)
+
+  suite.it('leaves the masters as they were', function()
+    local folder = support.folder 'commands-masters-untouched'
+    local paths = support.sources(folder)
+    local before = {}
+
+    for _, name in Masters do
+      before[name] = support.bytes(paths[name])
+    end
+
+    commands.run { folder = folder }
+
+    for _, name in Masters do
+      expect(holds(paths[name], before[name])).toBe(true)
+    end
+
+    expect(#jess.fs.list(folder)).toBe(4)
+  end)
+
+  suite.it('takes each file\'s records in the file\'s order', function()
+    local folder = support.folder 'commands-file-order'
+    support.sources(folder)
+    local result = commands.run { folder = folder, dryRun = true }
+
+    -- Morrowind.esm has sName before fJump; tes3conv would sort them the other way.
+    expect(starting(result.log, '  target=GMST')).toEqual {
+      '  target=GMST \'sName\'',
+      '  target=GMST \'fJump\'',
+    }
+  end)
+
+  suite.it('looks a record up in the masters in the order they are given', function()
+    local folder = support.folder 'commands-lookup-order'
+    local paths = support.sources(folder)
+    local fixed = commands.run { folder = folder, dryRun = true }
+    expect(starting(fixed.log, 'Copying \'shared_item\'')).toEqual {
+      'Copying \'shared_item\' (MISC) to \'Starwind.esp\' from \'Tribunal.esm\'',
+    }
+
+    local reversed = commands.run {
+      plugin = paths[Plugin],
+      masters = { paths['Morrowind.esm'], paths['Tribunal.esm'], paths['Bloodmoon.esm'] },
+      dryRun = true,
+    }
+
+    expect(starting(reversed.log, 'Copying \'shared_item\'')).toEqual {
+      'Copying \'shared_item\' (MISC) to \'Starwind.esp\' from \'Morrowind.esm\'',
+    }
+  end)
+end)
+
+suite.describe('files named in the request', function()
+  suite.it('reads the plugin and the masters it names, and calls each master by its file', function()
+    local folder = support.folder 'commands-named'
+    local paths = support.sources(folder, {
+      [Plugin] = 'Mine.omwaddon',
+      ['Bloodmoon.esm'] = 'Third.esm',
+      ['Tribunal.esm'] = 'Second.esm',
+      ['Morrowind.esm'] = 'First.esm',
+    })
+
+    local result = commands.run {
+      plugin = paths[Plugin],
+      masters = { paths['Bloodmoon.esm'], paths['Tribunal.esm'], paths['Morrowind.esm'] },
+    }
+
+    expect(result.plugin).toBe(paths[Plugin])
+    expect(result.output).toBe(paths[Plugin])
+    expect(result.masters).toEqual {
+      { name = 'Third.esm', path = paths['Bloodmoon.esm'] },
+      { name = 'Second.esm', path = paths['Tribunal.esm'] },
+      { name = 'First.esm', path = paths['Morrowind.esm'] },
+    }
+
+    expect(starting(result.log, 'Copying \'shared_item\'')).toEqual {
+      'Copying \'shared_item\' (MISC) to \'Starwind.esp\' from \'Second.esm\'',
+    }
+    expect(holds(paths[Plugin], support.golden 'Starwind.esp')).toBe(true)
+  end)
+
+  suite.it('takes the files it leaves out from the folder, under addVanillaRefs\'s names', function()
+    local folder = support.folder 'commands-named-some'
+    local paths = support.sources(folder)
+    local elsewhere = jess.fs.join(support.folder 'commands-named-elsewhere', 'Other.esp')
+    jess.fs.copy(paths[Plugin], elsewhere)
+    local before = support.bytes(paths[Plugin])
+    local result = commands.run { folder = folder, plugin = elsewhere }
+
+    expect(result.plugin).toBe(elsewhere)
+    expect(result.masters[3]).toEqual { name = 'Morrowind.esm', path = paths['Morrowind.esm'] }
+    expect(holds(elsewhere, support.golden 'Starwind.esp')).toBe(true)
+    expect(holds(paths[Plugin], before)).toBe(true)
+  end)
+
+  suite.it('writes the output it names, and leaves the plugin as it was', function()
+    local folder = support.folder 'commands-output'
+    local paths = support.sources(folder)
+    local before = support.bytes(paths[Plugin])
+    local output = jess.fs.join(folder, 'Standalone.esp')
+    local result = commands.run { folder = folder, output = output }
+
+    expect(result.output).toBe(output)
+    expect(result.written).toBe(true)
+    expect(holds(output, support.golden 'Starwind.esp')).toBe(true)
+    expect(holds(paths[Plugin], before)).toBe(true)
+  end)
+
+  suite.it('raises for a file it is given neither a name nor a folder for', function()
+    local folder = support.folder 'commands-no-folder'
+    local paths = support.sources(folder)
+
+    expect(function() commands.run {} end).toThrow(
+      'the request names neither \'Starwind.esp\' nor a folder to find it in'
+    )
+    expect(function() commands.run { plugin = paths[Plugin] } end).toThrow(
+      'the request names neither \'Bloodmoon.esm\' nor a folder to find it in'
+    )
+  end)
+
+  suite.it('raises for a file that isn\'t a plugin, and writes nothing', function()
+    local folder = support.folder 'commands-not-a-plugin'
+    local paths = support.sources(folder)
+    local before = support.bytes(paths[Plugin])
+    jess.fs.write(paths['Tribunal.esm'], 'not a plugin at all', { backup = false })
+
+    expect(function() commands.run { folder = folder } end).toThrow()
+    expect(holds(paths[Plugin], before)).toBe(true)
+  end)
+end)
+
+suite.describe('files that aren\'t there', function()
+  suite.it('are all named, and nothing is read or written', function()
+    local folder = support.folder 'commands-missing'
+    local paths = support.sources(folder)
+    local before = support.bytes(paths[Plugin])
+    jess.fs.remove(paths['Tribunal.esm'])
+    jess.fs.remove(paths['Morrowind.esm'])
+    local result = commands.run { folder = folder }
+
+    expect(result.missing).toEqual { paths['Tribunal.esm'], paths['Morrowind.esm'] }
+    expect(result.written).toBe(false)
+    expect(result.log).toEqual {}
+    expect(result.records).toBeNil()
+    expect(#result.masters).toBe(3)
+    expect(holds(paths[Plugin], before)).toBe(true)
+  end)
+
+  suite.it('name the plugin first, in a folder with none of the four', function()
+    local folder = support.folder 'commands-missing-all'
+    local result = commands.run { folder = folder }
+
+    expect(result.missing).toEqual {
+      jess.fs.join(folder, 'Starwind.esp'),
+      jess.fs.join(folder, 'Bloodmoon.esm'),
+      jess.fs.join(folder, 'Tribunal.esm'),
+      jess.fs.join(folder, 'Morrowind.esm'),
+    }
+    expect(jess.fs.list(folder)).toEqual {}
+  end)
+end)
+
+suite.describe('a dry run', function()
+  suite.it('returns the log and the counts of a run, and writes nothing', function()
+    local folder = support.folder 'commands-dry-run'
+    local paths = support.sources(folder)
+    local before = support.bytes(paths[Plugin])
+    local output = jess.fs.join(folder, 'Standalone.esp')
+    local result = commands.run { folder = folder, output = output, dryRun = true }
+
+    expect(result.dryRun).toBe(true)
+    expect(result.written).toBe(false)
+    expect(result.output).toBe(output)
+    expect(result.records).toEqual { plugin = 10, output = 24 }
+    expect(result.log).toEqual(support.lines(support.golden 'decoupleLog.txt'))
+    expect(jess.fs.exists(output)).toBe(false)
+    expect(holds(paths[Plugin], before)).toBe(true)
+  end)
+end)
+
+return suite

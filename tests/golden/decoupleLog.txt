@@ -1,0 +1,77 @@
+vanilla_rock added to Starwind.esp as a cell reference in Hangar
+sw_npc added to Starwind.esp as a cell reference in Hangar
+Copying 'bloodmoon_item' (MISC) to 'Starwind.esp' from 'Bloodmoon.esm'
+Dependency import:
+  pass=pre-dialogue
+  target=MISC 'bloodmoon_item'
+  source=CONT 'sw_chest'
+  field=dependency
+Copying 'Dark Elf' (RACE) to 'Starwind.esp' from 'Morrowind.esm'
+Dependency import:
+  pass=pre-dialogue
+  target=RACE 'Dark Elf'
+  source=NPC_ 'sw_npc'
+  field=race
+Copying 'Guard' (CLAS) to 'Starwind.esp' from 'Morrowind.esm'
+Dependency import:
+  pass=pre-dialogue
+  target=CLAS 'Guard'
+  source=NPC_ 'sw_npc'
+  field=class
+Copying 'shared_item' (MISC) to 'Starwind.esp' from 'Tribunal.esm'
+Dependency import:
+  pass=pre-dialogue
+  target=MISC 'shared_item'
+  source=CONT 'sw_chest'
+  field=dependency
+Copying 'vanilla_rock' (STAT) to 'Starwind.esp' from 'Morrowind.esm'
+Dependency import:
+  pass=pre-dialogue
+  target=STAT 'vanilla_rock'
+  source=CELL 'Hangar'
+  field=reference.id
+Copying 'vanilla_script' (SCPT) to 'Starwind.esp' from 'Morrowind.esm'
+Dependency import:
+  pass=pre-dialogue
+  target=SCPT 'vanilla_script'
+  source=MISC 'sw_root'
+  field=dependency
+Copying 'vanilla_spell' (SPEL) to 'Starwind.esp' from 'Morrowind.esm'
+Dependency import:
+  pass=pre-dialogue
+  target=SPEL 'vanilla_spell'
+  source=RACE 'Dark Elf'
+  field=dependency
+Copying 'tribunal_script' (SCPT) to 'Starwind.esp' from 'Tribunal.esm'
+Dependency import:
+  pass=pre-dialogue
+  target=SCPT 'tribunal_script'
+  source=MISC 'shared_item'
+  field=dependency
+Dependency import:
+  pass=pre-dialogue
+  target=GMST 'sName'
+  source=FOUNDATION 'Morrowind.esm'
+  field=foundation
+Dependency import:
+  pass=pre-dialogue
+  target=GMST 'fJump'
+  source=FOUNDATION 'Morrowind.esm'
+  field=foundation
+Dialogue liveness population begin
+Dialogue liveness actor	Npc	sw_npc	Dark Elf	Guard	male
+Dialogue liveness population end
+Dialogue INFO audit: effective=7, starwind_owned=2, retained_vanilla=4, pruned_vanilla=1
+Dialogue INFO keep reason: VANILLA_DIALOGUE_TOPIC=3
+Dialogue INFO keep reason: VANILLA_MATCHING_CLASS=1
+Dialogue INFO keep reason: VANILLA_MATCHING_RACE=1
+Dialogue INFO keep reason: VANILLA_MATCHING_SPEAKER_ID=2
+Dialogue DIAL materialized: topic="greeting 0" source=vanilla live_infos=1 topic_reason=["EngineTopic"]
+vanilla_rock added to Starwind.esp as a cell reference in Hangar
+sw_npc added to Starwind.esp as a cell reference in Hangar
+M1 imported as a line spoken by sw_npc
+T1 imported as a line spoken by sw_npc
+S1 imported as a line spoken by sw_npc
+M3 imported as a line spoken by 
+S2 imported as a line spoken by 
+G1 imported as a line spoken by 

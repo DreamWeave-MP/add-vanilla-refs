@@ -5,18 +5,22 @@ id = "org.dreamweave.add-vanilla-refs"
 version = "0.1.0"
 jess_api = "1"
 include = ["src"]
-tests = ["tests/run.luau", "tests/log.luau", "tests/style.luau"]
+tests = ["tests/run.luau", "tests/log.luau", "tests/commands.luau", "tests/style.luau"]
 
 [dependencies]
+"org.dreamweave.tes3" = "0.1"
 "org.dreamweave.tes3conv" = "0.1"
 
 [modules]
 "@add-vanilla-refs" = "src/init.luau"
+"@add-vanilla-refs/commands" = "src/commands.luau"
 
-# The module is inert API: it does nothing until something requires it, and it never touches the
-# filesystem. Callers hand it record lists and get a record list and a log back.
+# Every module here is inert API: it does nothing until something requires it, and runs with the
+# authority of whatever calls it. `@add-vanilla-refs` never touches the filesystem: callers hand
+# it record lists and get a record list and a log back. `@add-vanilla-refs/commands` reads the
+# plugin and its masters and writes the plugin, so its caller needs to read and write files.
 
 [[layer]]
 id = "add-vanilla-refs.core"
-requires = ["tes3conv.core"]
-exports = ["@add-vanilla-refs"]
+requires = ["tes3.core", "tes3conv.core"]
+exports = ["@add-vanilla-refs", "@add-vanilla-refs/commands"]
