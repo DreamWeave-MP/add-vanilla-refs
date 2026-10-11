@@ -106,10 +106,10 @@ local function chain(records: { Record }): { string }
 end
 
 suite.describe('add-vanilla-refs', function()
-  local Names = { names = { 'Bloodmoon.esm', 'Tribunal.esm', 'Morrowind.esm' } }
+  local options = { names = { 'Bloodmoon.esm', 'Tribunal.esm', 'Morrowind.esm' } }
 
   local function run(plugin: { Record }, bases: { { Record } }): ({ Record }, { string })
-    return addVanillaRefs.run(plugin, bases, Names)
+    return addVanillaRefs.run(plugin, bases, options)
   end
 
   suite.it('resolves imported records transitively', function()
