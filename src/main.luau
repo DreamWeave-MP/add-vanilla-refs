@@ -1,0 +1,7 @@
+--!strict
+--!native
+-- The `add-vanilla-refs` command target's entry: the command line's arguments in, the exit
+-- status out.
+local cli = require '@add-vanilla-refs/cli'
+
+return cli.run { ... }
