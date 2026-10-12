@@ -141,17 +141,9 @@ end
 
 function commands.run(request: RunRequest): RunResult
   local plugin = named(request, request.plugin, commands.Plugin)
-  local masters: { Master } = {}
-
-  if request.masters then
-    for _, path in request.masters do
-      table.insert(masters, { name = jess.fs.fileName(path) or path, path = path })
-    end
-  else
-    for _, name in commands.Masters do
-      table.insert(masters, { name = name, path = named(request, nil, name) })
-    end
-  end
+  local masters: { Master } = if request.masters
+    then [for path in request.masters => { name = jess.fs.fileName(path) or path, path = path }]
+    else [for name in commands.Masters => { name = name, path = named(request, nil, name) }]
 
   local result: RunResult = {
     command = 'run',
@@ -173,13 +165,8 @@ function commands.run(request: RunRequest): RunResult
   if #result.missing > 0 then return result end
 
   local source = records(plugin)
-  local bases: { Records }, names: { string } = {}, {}
-
-  for _, master in masters do
-    table.insert(bases, records(master.path, copyable))
-    table.insert(names, master.name)
-  end
-
+  local bases: { Records } = [for master in masters => records(master.path, copyable)]
+  local names = [for master in masters => master.name]
   local decoupled, log = addVanillaRefs.run(source, bases, { names = names })
   local built = tes3conv.plugin(decoupled)
   -- tes3 counts the records into the header as it saves.
