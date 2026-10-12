@@ -792,6 +792,9 @@ local function scriptTopics(
   topics: { [string]: string },
   live: { [string]: { [string]: boolean } }
 )
+  -- Few scripts add a topic, and one that doesn't say so anywhere has no line to read.
+  if not tes3.containsNoCase(text, 'addtopic') then return end
+
   for line in string.gmatch(text .. '\n', '([^\n]*)\n') do
     line = string.gsub(line, '\r$', '')
     local stripped = string.match(line, '^%s*(.*)$') :: string
