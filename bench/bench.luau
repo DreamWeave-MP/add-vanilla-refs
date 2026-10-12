@@ -259,23 +259,11 @@ end
 
 --- `count` things `held` by something: each a number and an id, as tes3conv has an inventory.
 local function inventory(held: { string }, count: number): { Value }
-  local items: { Value } = {}
-
-  for index = 1, count do
-    items[index] = { nextRandom() % 5 + 1, pick(held) }
-  end
-
-  return items
+  return [for _ in range(1, count) => { nextRandom() % 5 + 1, pick(held) }]
 end
 
 local function spells(pools: Pools, count: number): { Value }
-  local known: { Value } = {}
-
-  for index = 1, count do
-    known[index] = pick(pools.spells)
-  end
-
-  return known
+  return [for _ in range(1, count) => pick(pools.spells)]
 end
 
 --- An actor's packages: by turns one that follows, escorts, or (where `varied`) activates
@@ -373,21 +361,10 @@ local function object(kind: string, id: string, pools: Pools, varied: boolean): 
     record.aiPackages = packages(pools, varied)
     record.sound = maybe(pools.creatures, 2)
   elseif kind == 'LeveledItem' then
-    local items: { Value } = {}
-
-    for index = 1, nextRandom() % 6 + 2 do
-      items[index] = { pick(pools.items), index }
-    end
-
-    record.items = items
+    record.items = [for level in range(1, nextRandom() % 6 + 2) => { pick(pools.items), level }]
   elseif kind == 'LeveledCreature' then
-    local creatures: { Value } = {}
-
-    for index = 1, nextRandom() % 5 + 2 do
-      creatures[index] = { pick(pools.creatures), index }
-    end
-
-    record.creatures = creatures
+    record.creatures =
+      [for level in range(1, nextRandom() % 5 + 2) => { pick(pools.creatures), level }]
   elseif kind == 'Door' then
     record.script = maybe(pools.scripts, 8)
     record.openSound, record.closeSound = maybe(pools.sounds, 2), maybe(pools.sounds, 2)
@@ -595,13 +572,8 @@ local function world(
   local bloodmoon: Records = { header('Esm', { { Names[3], 1 } }) }
   local plugin: Records = { header('Esp', { { Names[3], 1 }, { Names[2], 1 }, { Names[1], 1 } }) }
 
-  for index = 1, 10 do
-    pools.races[index] = `race {index}`
-  end
-
-  for index = 1, 20 do
-    pools.classes[index] = `class {index}`
-  end
+  pools.races = [for index in range(1, 10) => `race {index}`]
+  pools.classes = [for index in range(1, 20) => `class {index}`]
 
   foundations(morrowind, pools, shape.objects // 16, varied)
   objects(morrowind, '', shape.objects, kinds, pools)
