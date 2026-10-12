@@ -56,7 +56,22 @@ local NeverCopy: { [string]: boolean } = {
 
 local Engine: { [string]: boolean } = { Greeting = true, Voice = true, Persuasion = true }
 
-local function lower(value: Value?): string return string.lower(tes3.string(value)) end
+-- The spellings a run has lowered, and what each came to. A run lowers every id it meets many
+-- times over: where it is defined, wherever it is named, and each time dialogue is put in
+-- order. `run` empties this as it starts and as it ends.
+local lowered: { [string]: string } = {}
+
+local function lower(value: Value?): string
+  if type(value) ~= 'string' then return '' end
+
+  local known = lowered[value]
+
+  if known then return known end
+
+  local made = string.lower(value)
+  lowered[value] = made
+  return made
+end
 
 local function tag(record: Record): string return tes3.Tags[record.type :: string] or '????' end
 
@@ -412,7 +427,7 @@ local function vanillaIndex(bases: { Records }): { { [string]: Record } }
     for _, record in records do
       if NeverCopy[record.type :: string] or tes3.isDeleted(record) then continue end
 
-      local id = string.lower(tes3.editorId(record))
+      local id = lower(tes3.editorId(record))
 
       if byId[id] == nil then byId[id] = record end
     end
@@ -452,7 +467,7 @@ local function resolve(
     if not found then continue end
 
     local record = found :: Record
-    local objectId = string.lower(tes3.editorId(record))
+    local objectId = lower(tes3.editorId(record))
 
     if state.defined[objectId] then continue end
 
@@ -487,7 +502,7 @@ local function importFoundations(
       if record.type == 'MagicEffect' then
         set, id = state.effects, tes3.string(record.effectId)
       else
-        set, id = state.defined, string.lower(tes3.editorId(record))
+        set, id = state.defined, lower(tes3.editorId(record))
       end
 
       if set[id] then continue end
@@ -1062,6 +1077,7 @@ function addVanillaRefs.run(
   bases: { Records },
   options: Options?
 ): (Records, { string })
+  table.clear(lowered)
   local records: Records = table.clone(plugin)
   local state: State = {
     plugin = records,
@@ -1074,7 +1090,7 @@ function addVanillaRefs.run(
 
   for _, record in records do
     if not NeverCopy[record.type :: string] then
-      state.defined[string.lower(tes3.editorId(record))] = true
+      state.defined[lower(tes3.editorId(record))] = true
     end
 
     if record.type == 'MagicEffect' then state.effects[tes3.string(record.effectId)] = true end
@@ -1115,6 +1131,7 @@ function addVanillaRefs.run(
   header.masters = {}
   header.version = 1.3
   kept[1] = header
+  table.clear(lowered)
   return kept, state.log
 end
 
