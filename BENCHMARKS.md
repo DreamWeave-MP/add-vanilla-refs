@@ -44,18 +44,18 @@ Without a scratch folder the command isn't timed, and no capability is needed.
 - Date: 2026-10-12.
 - Binary: the verified release build of Jess 0.1.0 on l3i 2.0.1 (Luau 0.742), the same one for
   both sides, with the same `@tes3` and `@tes3conv` beside both.
-- Base: `fa3b211`, the package before the move, with the bench as it is now. Head: `73242b7`.
+- Base: `fa3b211`, the package before the move, with the bench as it is now. Head: `3237943`.
 - Protocol: the whole bench run against base, then head, three times over, back to back under one
   lock; each cell is the median of its three runs. A difference under 5 percent is called no
   change.
 
 | Workload | Base | Head | Base / head |
 |---|---:|---:|---:|
-| a plugin of 2523 records over masters of 22036: the whole run | 452.6 ms | 67.83 ms | 6.67x |
-| a plugin of 4407 records over masters of 18799: objects alone | 102.3 ms | 44.22 ms | 2.31x |
-| a plugin of 511 records over masters of 6424: cells of 512 references | 356.8 ms | 38.54 ms | 9.26x |
-| a plugin of 1943 records over masters of 23565: dialogue | 63.32 ms | 40.20 ms | 1.58x |
-| commands.run, a dry run: a plugin of 506 records over masters of 5364, as files | 102.6 ms | 47.44 ms | 2.16x |
+| a plugin of 2523 records over masters of 22036: the whole run | 451.0 ms | 68.75 ms | 6.56x |
+| a plugin of 4407 records over masters of 18799: objects alone | 101.6 ms | 45.50 ms | 2.23x |
+| a plugin of 511 records over masters of 6424: cells of 512 references | 367.2 ms | 38.95 ms | 9.43x |
+| a plugin of 1943 records over masters of 23565: dialogue | 63.63 ms | 39.17 ms | 1.62x |
+| commands.run, a dry run: a plugin of 506 records over masters of 5364, as files | 103.1 ms | 47.01 ms | 2.19x |
 
 None of it is the dialect, and none of it is the data plane: a run is strings and record tables,
 with no numbers in bulk to hand to `@dream/data`. The comprehensions, `any` reducers, slice, and
@@ -64,20 +64,24 @@ What moved the numbers was the work a run no longer does, found by profiling it:
 
 | Change | Whole | Objects | Cells | Dialogue | Command |
 |---|---:|---:|---:|---:|---:|
-| `dc4b98e` which reference of a cell named each record it needs, from one walk of its references instead of a walk for each record | 3.17x | no change | 3.24x | no change | 1.76x |
-| `90e6820` the lists of field names a record's ids are read by, made once instead of for each reference | no change | no change | 1.07x | no change | no change |
-| `709159f` each spelling of an id lowered once a run | 1.17x | 1.09x | 1.19x | 1.17x | 1.06x |
-| `b68fe21` nothing pending for an id that is already defined, and only what is pending sorted | 1.33x | 1.40x | 1.41x | 1.07x | 1.07x |
-| `f3449d5` the masters indexed, and their foundations found, once a run instead of in four walks | no change | 1.07x | no change | 1.11x | no change |
-| `d9fdf61` the second pass answered with what a record needed in the first | 1.10x | no change | 1.19x | no change | no change |
-| `4b6e92a` `tes3.isDeleted` asked only of a record with flags | 1.10x | 1.10x | 1.07x | 1.15x | no change |
-| `a760eba` a script's lines read only when it says AddTopic somewhere | 1.11x | 1.24x | 1.09x | no change | 1.06x |
-| `b4fa7b6` the first pass's lines added to the log one at a time, not by `table.move` | no change | no change | 1.14x | no change | no change |
+| `dc4b98e` which reference of a cell named each record it needs, from one walk of its references instead of a walk for each record | 3.23x | no change | 3.31x | no change | 1.75x |
+| `90e6820` the lists of field names a record's ids are read by, made once instead of for each reference | no change | no change | 1.05x | no change | no change |
+| `709159f` each spelling of an id lowered once a run | 1.14x | 1.09x | 1.20x | 1.16x | no change |
+| `b68fe21` nothing pending for an id that is already defined, and only what is pending sorted | 1.28x | 1.33x | 1.37x | 1.09x | 1.08x |
+| `f3449d5` the masters indexed, and their foundations found, once a run instead of in four walks | 1.09x | 1.13x | no change | 1.11x | no change |
+| `d9fdf61` the second pass answered with what a record needed in the first | no change | no change | 1.15x | no change | no change |
+| `4b6e92a` `tes3.isDeleted` asked only of a record with flags | 1.09x | 1.09x | 1.07x | 1.13x | no change |
+| `a760eba` a script's lines read only when it says AddTopic somewhere | 1.15x | 1.29x | 1.10x | no change | 1.07x |
+| `b4fa7b6` the first pass's lines added to the log one at a time, not by `table.move` | no change | no change | 1.21x | no change | no change |
+| `3237943` a record named whenever it is first to need anything, so a cell with no data is refused as it was before `b68fe21` | no change | no change | no change | no change | no change |
 
-Each cell there is one run of the bench against that commit over one against the commit before
-it, all thirteen run in order under one lock, so a cell is good to a few percent and no better;
-the first table is the measurement. The dialect commits between them (`2e91d94`, `b1b2332`,
-`c5e92a7`, `c07e561`, `73242b7`) were in the same run and moved nothing.
+Each cell there is the median of three runs of the bench against that commit over the median of
+three against the commit before it (four for `d9fdf61` and `4b6e92a`), the two alternating with
+their neighbours under one lock. A cell is good to about 5 percent and no better: `90e6820`'s is
+at that edge, and a first pass at `d9fdf61` and `4b6e92a` had to be thrown away for a machine busy
+enough to move a commit with no change in it by 15 percent. The first table is the measurement.
+The dialect commits between them (`2e91d94`, `b1b2332`, `c5e92a7`) were in the same runs and
+moved nothing; `c07e561` and `73242b7` touch only the suites and the bench.
 
 The first row is most of it. `dependency_field` walked a cell's references from the top for every
 record the cell needed, making a table of six pairs at each reference on the way: the square of
@@ -89,4 +93,4 @@ of the command's time is now `@tes3` and `@tes3conv` reading the files and writi
 `table.move(lines, 1, #lines, #log + 1, log)` is the one surprise worth knowing outside this
 package: Luau resizes the destination to exactly fit when a move runs past its end, so appending
 a list to a long one that way copies the long one every time. Adding the lines one at a time is
-the last row above.
+the `b4fa7b6` row above.
