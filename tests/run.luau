@@ -372,6 +372,21 @@ suite.describe('add-vanilla-refs', function()
     expect(ids(twice)).toEqual { 'Dialogue:Topic', 'DialogueInfo:Info' }
   end)
 
+  suite.it('refuses a cell with no data to name it by, whoever defines what it places', function()
+    local function hall(placed: string): Record
+      return {
+        type = 'Cell',
+        flags = '',
+        name = 'Hall',
+        references = { { mastIndex = 0, refrIndex = 1, id = placed } },
+      }
+    end
+
+    local bases = { { header(), misc 'vanilla_thing' } }
+    expect(function() run({ header(), hall 'vanilla_thing' }, bases) end).toThrow 'grid'
+    expect(function() run({ header(), misc 'own_thing', hall 'Own_Thing' }, bases) end).toThrow 'grid'
+  end)
+
   suite.it('drops the masters', function()
     local result = run({ header { { 'Morrowind.esm', 79837557 } } }, {})
     expect(#result[1].masters).toBe(0)
