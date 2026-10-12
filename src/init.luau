@@ -82,8 +82,8 @@ local function tag(record: Record): string return tes3.Tags[record.type :: strin
 
 local function list(value: Value?): { Value } return (value or {}) :: { Value } end
 
--- The fields `collect_required_ids_from_object` reads ids from: a magic effect's sounds and
--- visuals, and of a cell's reference, who owns it, which it says so of, and the rest.
+-- The fields `collect_required_ids_from_object` reads a magic effect's ids from: its sounds and
+-- its visuals.
 local EffectFields = {
   'boltSound',
   'castSound',
@@ -95,8 +95,6 @@ local EffectFields = {
   'areaVisual',
 }
 
-local OwnerFields = { 'owner', 'ownerGlobal', 'ownerFaction' }
-local HeldFields = { 'key', 'trap', 'soul' }
 
 -- `collect_required_ids_from_object`: what a record names, lowercased. Like addVanillaRefs, it
 -- prints a few of them as it goes.
@@ -209,24 +207,23 @@ local function requiredIds(record: Record, log: Log): { [string]: boolean }
 
     local name = tes3.string(record.name)
 
+    local function addOwner(value: Value?)
+      if value == nil then return end
+
+      add(value)
+      table.insert(log, `{lower(value)} added to Starwind.esp as an owner reference`)
+    end
+
     for _, value in list(record.references) do
-      local reference = value :: Table
-      add(reference.id)
-      table.insert(
-        log,
-        `{tes3.string(reference.id)} added to Starwind.esp as a cell reference in {name}`
-      )
-
-      for _, field in OwnerFields do
-        if reference[field] ~= nil then
-          add(reference[field])
-          table.insert(log, `{lower(reference[field])} added to Starwind.esp as an owner reference`)
-        end
-      end
-
-      for _, field in HeldFields do
-        if reference[field] ~= nil then add(reference[field]) end
-      end
+      local {id, owner, ownerGlobal, ownerFaction, key, trap, soul} = value :: Table
+      add(id)
+      table.insert(log, `{tes3.string(id)} added to Starwind.esp as a cell reference in {name}`)
+      addOwner(owner)
+      addOwner(ownerGlobal)
+      addOwner(ownerFaction)
+      add(key)
+      add(trap)
+      add(soul)
     end
   elseif kind == 'DialogueInfo' then
     add(record.speakerId)
@@ -282,38 +279,28 @@ local function spellsHold(record: Record, matches: (Value?) -> boolean): boolean
   return false
 end
 
--- What a reference names besides its id, in the order `dependency_field` asks of them, and
--- what it calls each.
-local ReferenceFields = {
-  { 'owner', 'reference.owner' },
-  { 'ownerGlobal', 'reference.owner_global' },
-  { 'ownerFaction', 'reference.owner_faction' },
-  { 'key', 'reference.key' },
-  { 'trap', 'reference.trap' },
-  { 'soul', 'reference.soul' },
-}
-
 -- `dependency_field` for a cell, of every id its references name at once: the first reference
--- to name an id is the one that named it, by its id before anything else of it. A cell is asked
--- about each id it needs, and walking its references for each is the square of a cell's size.
+-- to name an id is the one that named it, by its id before anything else of it, in the order
+-- `dependency_field` asks of them. A cell is asked about each id it needs, and walking its
+-- references for each is the square of a cell's size.
 local function referenceFields(cell: Record): { [string]: string }
   local fields: { [string]: string } = {}
 
+  local function names(value: Value?, field: string)
+    local named = lower(value)
+
+    if not fields[named] then fields[named] = field end
+  end
+
   for _, value in list(cell.references) do
-    local reference = value :: Table
-    local id = lower(reference.id)
-
-    if not fields[id] then fields[id] = 'reference.id' end
-
-    for _, pair in ReferenceFields do
-      local field = reference[pair[1]]
-
-      if field == nil then continue end
-
-      local named = lower(field)
-
-      if not fields[named] then fields[named] = pair[2] end
-    end
+    local {id, owner, ownerGlobal, ownerFaction, key, trap, soul} = value :: Table
+    names(id, 'reference.id')
+    names(owner, 'reference.owner')
+    names(ownerGlobal, 'reference.owner_global')
+    names(ownerFaction, 'reference.owner_faction')
+    names(key, 'reference.key')
+    names(trap, 'reference.trap')
+    names(soul, 'reference.soul')
   end
 
   return fields
