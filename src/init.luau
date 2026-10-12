@@ -95,7 +95,6 @@ local EffectFields = {
   'areaVisual',
 }
 
-
 -- `collect_required_ids_from_object`: what a record names, lowercased. Like addVanillaRefs, it
 -- prints a few of them as it goes.
 local function requiredIds(record: Record, log: Log): { [string]: boolean }
@@ -370,8 +369,8 @@ local function needs(state: State, record: Record): { [string]: boolean }
   if known then
     local printed = state.printed[record]
 
-    -- One line at a time: `table.move` past the end of a list grows it a write at a time, at
-    -- several times the cost of adding to it.
+    -- One line at a time: `table.move` past the end of a list resizes the whole list to fit
+    -- what it was given, every time, where adding to it doubles its room.
     if printed then
       for _, line in printed do
         table.insert(log, line)
