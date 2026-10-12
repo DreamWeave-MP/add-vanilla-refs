@@ -325,6 +325,35 @@ local function actor(
   }
 end
 
+-- What a script's lines are like, none of them adding a topic.
+local ScriptLines = {
+  'if ( MenuMode == 1 )',
+  '\treturn',
+  'endif',
+  '',
+  'if ( GetDistance Player < 256 )',
+  '\tset timer to ( timer + GetSecondsPassed )',
+  '; wait until the player has had the topic added',
+  'MessageBox "Nothing happens."',
+  'Journal "sw_quest" 10',
+  'set done to 1',
+  'PlaySound3D "Door Stone Open"',
+  'if ( OnActivate == 1 )',
+  '\tActivate',
+}
+
+--- A script the length scripts are: a few dozen lines, ended as the Construction Set ends them.
+local function scriptText(id: string): string
+  local lines = { `begin {id}`, '', 'short done', 'float timer', '' }
+
+  for _ = 1, nextRandom() % 32 + 8 do
+    table.insert(lines, pick(ScriptLines))
+  end
+
+  table.insert(lines, 'end')
+  return table.concat(lines, '\r\n')
+end
+
 --- An object of `kind` naming what one of its kind names, out of `pools`.
 local function object(kind: string, id: string, pools: Pools, varied: boolean): Record
   local record: Record = { type = kind, flags = '', id = id }
@@ -333,7 +362,7 @@ local function object(kind: string, id: string, pools: Pools, varied: boolean): 
   if kind == 'Npc' then
     return actor(id, pools, #pools.races, #pools.classes, varied)
   elseif kind == 'Script' then
-    record.text = `begin {id}\nend`
+    record.text = scriptText(id)
   elseif kind == 'Container' then
     record.script = maybe(pools.scripts, 8)
     record.inventory = inventory(pools.items, nextRandom() % 5 + 1)
@@ -766,7 +795,7 @@ local Whole: Shape = {
 }
 
 local whole = world(Whole, Kinds)
-workload(`{sizes(whole)}: the whole run`, '77421cc95904a71d', running(whole))
+workload(`{sizes(whole)}: the whole run`, 'daf1fc69e6c5968f', running(whole))
 
 local Objects: Shape = {
   objects = 12000,
@@ -780,7 +809,7 @@ local Objects: Shape = {
 }
 
 local objectsOnly = world(Objects, Kinds)
-workload(`{sizes(objectsOnly)}: objects alone`, '0f0bc79ab1a05a2c', running(objectsOnly))
+workload(`{sizes(objectsOnly)}: objects alone`, '202d8b0804df9b38', running(objectsOnly))
 
 local Cells: Shape = {
   objects = 4000,
@@ -794,7 +823,7 @@ local Cells: Shape = {
 }
 
 local cellsOnly = world(Cells, Kinds)
-workload(`{sizes(cellsOnly)}: cells of 512 references`, 'f176c23f58444be5', running(cellsOnly))
+workload(`{sizes(cellsOnly)}: cells of 512 references`, '5cf3a75b31daa536', running(cellsOnly))
 
 local Dialogue: Shape = {
   objects = 800,
@@ -808,7 +837,7 @@ local Dialogue: Shape = {
 }
 
 local dialogueOnly = world(Dialogue, Kinds)
-workload(`{sizes(dialogueOnly)}: dialogue`, '7bfae2ef0f67765a', running(dialogueOnly))
+workload(`{sizes(dialogueOnly)}: dialogue`, 'fc22aed3a0e6c1f0', running(dialogueOnly))
 
 if not scratch then return end
 
@@ -852,7 +881,7 @@ for position, name in Names do
   write(name, files.bases[position])
 end
 
-workload(`commands.run, a dry run: {sizes(files)}, as files`, 'f97ee89d2a1640eb', function()
+workload(`commands.run, a dry run: {sizes(files)}, as files`, '4e4a36bf564ed1dd', function()
   local result = commands.run { folder = folder, dryRun = true }
   local counts = assert(result.records, 'the files the bench wrote are missing')
 
