@@ -257,7 +257,45 @@ local function spellsHold(record: Record, matches: (Value?) -> boolean): boolean
   return false
 end
 
--- `dependency_field`: which field of `record` named `target`.
+-- What a reference names besides its id, in the order `dependency_field` asks of them, and
+-- what it calls each.
+local ReferenceFields = {
+  { 'owner', 'reference.owner' },
+  { 'ownerGlobal', 'reference.owner_global' },
+  { 'ownerFaction', 'reference.owner_faction' },
+  { 'key', 'reference.key' },
+  { 'trap', 'reference.trap' },
+  { 'soul', 'reference.soul' },
+}
+
+-- `dependency_field` for a cell, of every id its references name at once: the first reference
+-- to name an id is the one that named it, by its id before anything else of it. A cell is asked
+-- about each id it needs, and walking its references for each is the square of a cell's size.
+local function referenceFields(cell: Record): { [string]: string }
+  local fields: { [string]: string } = {}
+
+  for _, value in list(cell.references) do
+    local reference = value :: Table
+    local id = lower(reference.id)
+
+    if not fields[id] then fields[id] = 'reference.id' end
+
+    for _, pair in ReferenceFields do
+      local field = reference[pair[1]]
+
+      if field == nil then continue end
+
+      local named = lower(field)
+
+      if not fields[named] then fields[named] = pair[2] end
+    end
+  end
+
+  return fields
+end
+
+-- `dependency_field`: which field of `record` named `target`. A cell answers with
+-- `referenceFields` instead.
 local function dependencyField(record: Record, target: string): string
   local function matches(value: Value?): boolean return lower(value) == target end
 
@@ -275,29 +313,6 @@ local function dependencyField(record: Record, target: string): string
     end
 
     return 'player_faction'
-  elseif kind == 'Cell' then
-    for _, value in list(record.references) do
-      local reference = value :: Table
-
-      if matches(reference.id) then return 'reference.id' end
-
-      local referenceFields = {
-        { 'owner', 'reference.owner' },
-        { 'ownerGlobal', 'reference.owner_global' },
-        { 'ownerFaction', 'reference.owner_faction' },
-        { 'key', 'reference.key' },
-        { 'trap', 'reference.trap' },
-        { 'soul', 'reference.soul' },
-      }
-
-      for _, pair in referenceFields do
-        local field = reference[pair[1]]
-
-        if field ~= nil and matches(field) then return pair[2] end
-      end
-    end
-
-    return 'region'
   elseif kind == 'Npc' or kind == 'Creature' then
     if matches(record.script) then
       return 'script'
@@ -354,6 +369,7 @@ local function enqueue(
   end
 
   table.sort(ids)
+  local named = if record.type == 'Cell' then referenceFields(record) else nil
 
   for _, id in ids do
     if required[id] then continue end
@@ -365,7 +381,8 @@ local function enqueue(
         pass = pass,
         sourceType = tag(record),
         sourceId = sourceId(record),
-        field = dependencyField(record, id),
+        -- What none of a cell's references named, its region did.
+        field = if named then named[id] or 'region' else dependencyField(record, id),
       },
     })
   end
