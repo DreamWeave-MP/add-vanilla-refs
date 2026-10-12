@@ -384,23 +384,29 @@ local function enqueue(
 )
   local ids = {}
 
+  -- `resolve` passes over an id that is defined, and what is defined stays so: nothing is
+  -- pending for one.
   for id in requiredIds(record, state.log) do
-    table.insert(ids, id)
-  end
-
-  table.sort(ids)
-  local named = if record.type == 'Cell' then referenceFields(record) else nil
-
-  for _, id in ids do
     if required[id] then continue end
 
     required[id] = true
+
+    if not state.defined[id] then table.insert(ids, id) end
+  end
+
+  if #ids == 0 then return end
+
+  table.sort(ids)
+  local sourceType, source = tag(record), sourceId(record)
+  local named = if record.type == 'Cell' then referenceFields(record) else nil
+
+  for _, id in ids do
     table.insert(pending, {
       id = id,
       cause = {
         pass = pass,
-        sourceType = tag(record),
-        sourceId = sourceId(record),
+        sourceType = sourceType,
+        sourceId = source,
         -- What none of a cell's references named, its region did.
         field = if named then named[id] or 'region' else dependencyField(record, id),
       },
