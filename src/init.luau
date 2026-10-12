@@ -370,7 +370,13 @@ local function needs(state: State, record: Record): { [string]: boolean }
   if known then
     local printed = state.printed[record]
 
-    if printed then table.move(printed, 1, #printed, #log + 1, log) end
+    -- One line at a time: `table.move` past the end of a list grows it a write at a time, at
+    -- several times the cost of adding to it.
+    if printed then
+      for _, line in printed do
+        table.insert(log, line)
+      end
+    end
 
     return known
   end
