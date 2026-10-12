@@ -373,6 +373,9 @@ type State = {
   defined: { [string]: boolean },
   effects: { [string]: boolean },
   log: Log,
+  --- `vanillaIndex`'s two, made once a run: the masters don't change during one.
+  index: { { [string]: Record } },
+  foundations: { Records },
 }
 
 local function enqueue(
@@ -422,31 +425,40 @@ local function logImport(state: State, record: Record, cause: Cause)
   table.insert(state.log, `  field={cause.field}`)
 end
 
+local Foundations: { [string]: boolean } =
+  { GameSetting = true, MagicEffect = true, Race = true, Class = true }
+
 -- `VanillaIndex`: each master's records by lowercased id, the first of each id, leaving out the
--- types addVanillaRefs never copies and deleted records.
-local function vanillaIndex(bases: { Records }): { { [string]: Record } }
-  local index = {}
+-- types addVanillaRefs never copies and deleted records. Beside it, the records of each master
+-- that `importFoundations` copies whatever needs them, in the master's order: none is of a type
+-- that is never copied.
+local function vanillaIndex(bases: { Records }): ({ { [string]: Record } }, { Records })
+  local index, foundations = {}, {}
 
   for position, records in bases do
     local byId: { [string]: Record } = {}
+    local founding: Records = {}
 
     for _, record in records do
-      if NeverCopy[record.type :: string] or tes3.isDeleted(record) then continue end
+      local kind = record.type :: string
+
+      if NeverCopy[kind] or tes3.isDeleted(record) then continue end
+
+      if Foundations[kind] then table.insert(founding, record) end
 
       local id = lower(tes3.editorId(record))
 
       if byId[id] == nil then byId[id] = record end
     end
 
-    index[position] = byId
+    index[position], foundations[position] = byId, founding
   end
 
-  return index
+  return index, foundations
 end
 
 local function resolve(
   state: State,
-  index: { { [string]: Record } },
   required: { [string]: boolean },
   pending: { Pending },
   pass: string
@@ -461,7 +473,7 @@ local function resolve(
 
     local found: Record?, from = nil, 0
 
-    for position, byId in index do
+    for position, byId in state.index do
       local record = byId[item.id]
 
       if record then
@@ -490,19 +502,14 @@ local function resolve(
   table.clear(pending)
 end
 
-local Foundations: { [string]: boolean } =
-  { GameSetting = true, MagicEffect = true, Race = true, Class = true }
-
 local function importFoundations(
   state: State,
   required: { [string]: boolean },
   pending: { Pending },
   pass: string
 )
-  for position, records in state.bases do
+  for position, records in state.foundations do
     for _, record in records do
-      if tes3.isDeleted(record) or not Foundations[record.type :: string] then continue end
-
       local set, id
 
       if record.type == 'MagicEffect' then
@@ -528,7 +535,6 @@ end
 
 -- `add_vanilla_refs_with_dialogue`.
 local function addRefs(state: State, includeDialogue: boolean, pass: string)
-  local index = vanillaIndex(state.bases)
   local required: { [string]: boolean } = {}
   local pending: { Pending } = {}
 
@@ -542,9 +548,9 @@ local function addRefs(state: State, includeDialogue: boolean, pass: string)
 
   table.sort(pending, function(left, right) return left.id < right.id end)
 
-  resolve(state, index, required, pending, pass)
+  resolve(state, required, pending, pass)
   importFoundations(state, required, pending, pass)
-  resolve(state, index, required, pending, pass)
+  resolve(state, required, pending, pass)
 end
 
 -- A topic's INFOs in OpenMW's order (`ESM::InfoOrder::insertInfo`), as addVanillaRefs keeps
@@ -1092,6 +1098,8 @@ function addVanillaRefs.run(
     defined = {},
     effects = {},
     log = {},
+    index = {},
+    foundations = {},
   }
 
   for _, record in records do
@@ -1102,6 +1110,7 @@ function addVanillaRefs.run(
     if record.type == 'MagicEffect' then state.effects[tes3.string(record.effectId)] = true end
   end
 
+  state.index, state.foundations = vanillaIndex(bases)
   -- Dirty vanilla INFOs mustn't bootstrap their speakers into the population dialogue is kept by.
   addRefs(state, false, 'pre-dialogue')
   sanitizePackageCells(state)
