@@ -268,6 +268,41 @@ suite.describe('add-vanilla-refs', function()
     end
   )
 
+  suite.it('reads a script\'s AddTopic lines however they are cased, indented, and ended', function()
+    local lines = {
+      'begin starwind_script',
+      '; AddTopic "Commented"',
+      '  addtopic "Quoted Topic"\r',
+      '\tADDTOPIC Bare more',
+      'AddTopicJoined "Joined"',
+      'set done to 1 ; AddTopic "Trailing"',
+      'end',
+    }
+
+    local script =
+      { type = 'Script', flags = '', id = 'starwind_script', text = table.concat(lines, '\n') }
+    local result = run({ header(), script }, {
+      {
+        header(),
+        dial 'Commented',
+        info 'CommentedInfo',
+        dial 'quoted topic',
+        info 'QuotedInfo',
+        dial 'BARE',
+        info 'BareInfo',
+        dial 'Joined',
+        info 'JoinedInfo',
+        dial 'Trailing',
+        info 'TrailingInfo',
+      },
+    })
+    expect(has(result, 'QuotedInfo') and has(result, 'BareInfo')).toBe(true)
+    expect(has(result, 'quoted topic') and has(result, 'BARE')).toBe(true)
+    expect(
+      has(result, 'CommentedInfo') or has(result, 'JoinedInfo') or has(result, 'TrailingInfo')
+    ).toBe(false)
+  end)
+
   suite.it('resolves what materialized dialogue needs in the second pass', function()
     local result = run({ header() }, {
       {
