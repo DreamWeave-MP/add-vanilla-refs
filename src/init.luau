@@ -62,6 +62,22 @@ local function tag(record: Record): string return tes3.Tags[record.type :: strin
 
 local function list(value: Value?): { Value } return (value or {}) :: { Value } end
 
+-- The fields `collect_required_ids_from_object` reads ids from: a magic effect's sounds and
+-- visuals, and of a cell's reference, who owns it, which it says so of, and the rest.
+local EffectFields = {
+  'boltSound',
+  'castSound',
+  'hitSound',
+  'areaSound',
+  'castVisual',
+  'boltVisual',
+  'hitVisual',
+  'areaVisual',
+}
+
+local OwnerFields = { 'owner', 'ownerGlobal', 'ownerFaction' }
+local HeldFields = { 'key', 'trap', 'soul' }
+
 -- `collect_required_ids_from_object`: what a record names, lowercased. Like addVanillaRefs, it
 -- prints a few of them as it goes.
 local function requiredIds(record: Record, log: Log): { [string]: boolean }
@@ -80,18 +96,7 @@ local function requiredIds(record: Record, log: Log): { [string]: boolean }
     add(record.creature)
     add(record.sound)
   elseif kind == 'MagicEffect' then
-    local effectFields = {
-      'boltSound',
-      'castSound',
-      'hitSound',
-      'areaSound',
-      'castVisual',
-      'boltVisual',
-      'hitVisual',
-      'areaVisual',
-    }
-
-    for _, field in effectFields do
+    for _, field in EffectFields do
       add(record[field])
     end
   elseif kind == 'Region' then
@@ -192,14 +197,14 @@ local function requiredIds(record: Record, log: Log): { [string]: boolean }
         `{tes3.string(reference.id)} added to Starwind.esp as a cell reference in {name}`
       )
 
-      for _, field in { 'owner', 'ownerGlobal', 'ownerFaction' } do
+      for _, field in OwnerFields do
         if reference[field] ~= nil then
           add(reference[field])
           table.insert(log, `{lower(reference[field])} added to Starwind.esp as an owner reference`)
         end
       end
 
-      for _, field in { 'key', 'trap', 'soul' } do
+      for _, field in HeldFields do
         if reference[field] ~= nil then add(reference[field]) end
       end
     end
