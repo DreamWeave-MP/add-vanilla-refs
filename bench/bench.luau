@@ -1,0 +1,865 @@
+--!strict
+-- add-vanilla-refs, timed from Luau: `run` over record lists the shape a plugin and its three
+-- masters are, whole and by the part of a run each is mostly made of (the objects a plugin's own
+-- need, the references of its cells, dialogue), and `commands.run` over such a four as files.
+-- Run by `jess run --package . --package-path .. bench/bench.luau [filter] [scratch]`, on a
+-- release build. The command is timed only when a scratch folder is given to write the files
+-- into, which takes `--capability filesystem.read --capability filesystem.write`.
+--
+-- Prints one line per workload: its name, a tab, and the seconds one call takes. Every workload's
+-- result is hashed whole, before the timing and after it, and has to come to the hash written
+-- here: a run that stopped doing the work, or does other work, fails instead of posting a time.
+local addVanillaRefs = require '@add-vanilla-refs'
+local bytes = require '@dream/bytes'
+local commands = require '@add-vanilla-refs/commands'
+local core = require '@tes3'
+local records = require '@tes3conv/records'
+local tes3conv = require '@tes3conv'
+
+-- A build without the verified toolchain runs Luau slower than a release does, so a number from
+-- one says nothing about what ships.
+if not jess.bench.verified then
+  error(
+    'add-vanilla-refs bench: this jess was built without the verified toolchain: measure on a release build',
+    0
+  )
+end
+
+type Table = records.Table
+type Value = records.Value
+type Record = records.Record
+type Records = records.Records
+
+--- A filter on the workload names, none running them all; and a folder to write plugin files
+--- into, without which the command isn't timed.
+local filter: string?, scratch: string? = ...
+local only = if filter and filter ~= '' then filter else nil
+
+local function median(samples: { number }): number
+  table.sort(samples)
+  return samples[(#samples + 1) // 2]
+end
+
+-- A full collection, run between batches, so one batch's garbage isn't the next one's collection.
+local collect = jess.bench.collect
+
+--- Adds everything `value` holds to `hasher`: a list in its order, a record's fields in the order
+--- of their names, so two tables holding the same hash the same however they were built.
+local function hash(hasher: dream_bytes_Hasher, value: Value?)
+  if type(value) ~= 'table' then
+    hasher:update(`{type(value)} {value};`)
+    return
+  end
+
+  if #value > 0 then
+    hasher:update '['
+
+    for _, item in value do
+      hash(hasher, item)
+    end
+
+    hasher:update ']'
+    return
+  end
+
+  local names: { string } = {}
+
+  for name in value do
+    table.insert(names, name :: string)
+  end
+
+  table.sort(names)
+  hasher:update '{'
+
+  for _, name in names do
+    hasher:update(`{name}=`)
+    hash(hasher, value[name])
+  end
+
+  hasher:update '}'
+end
+
+local function digest(result: Table): string
+  local hasher = bytes.hasher 'xxh3'
+  hash(hasher, result)
+  return hasher:finish()
+end
+
+--- Seconds per call of `body`: warmed up, then the median of seven batches of a size that takes
+--- about a tenth of a second. What `body` returns has to hash to `expected` before the batches
+--- and after them.
+local function measure(name: string, expected: string, body: () -> Table): number
+  local function verify()
+    local got = digest(body())
+
+    if got ~= expected then error(`{name}: the result hashes to {got}, not {expected}`, 0) end
+  end
+
+  collect()
+  verify()
+  local start = os.clock()
+  body()
+  local once = math.max(os.clock() - start, 1e-7)
+  local iterations = math.max(1, math.floor(0.1 / once))
+  local samples = {}
+
+  for batch = 1, 7 do
+    collect()
+    start = os.clock()
+
+    for _ = 1, iterations do
+      body()
+    end
+
+    samples[batch] = (os.clock() - start) / iterations
+  end
+
+  verify()
+  return median(samples)
+end
+
+--- Times `body`, and prints its name and its seconds per call.
+local function workload(name: string, expected: string, body: () -> Table)
+  if only and not string.find(name, only, 1, true) then return end
+
+  print(`{name}\t{measure(name, expected, body)}`)
+end
+
+local random = 0
+
+local function nextRandom(): number
+  random = bit32.bxor(random, bit32.lshift(random, 13))
+  random = bit32.bxor(random, bit32.rshift(random, 17))
+  random = bit32.bxor(random, bit32.lshift(random, 5))
+  return random
+end
+
+local function pick(list: { string }): string return list[nextRandom() % #list + 1] end
+
+--- One of `list` once in `oneIn` times, and otherwise no id.
+local function maybe(list: { string }, oneIn: number): string
+  if nextRandom() % oneIn ~= 0 then return '' end
+
+  return pick(list)
+end
+
+-- The masters in the order a record is looked up in them, as addVanillaRefs has them.
+local Names = { 'Bloodmoon.esm', 'Tribunal.esm', 'Morrowind.esm' }
+local PluginName = 'Starwind.esp'
+
+local Words =
+  { 'ex', 'in', 'furn', 'flora', 'terrain', 'common', 'de', 'hlaalu', 'redoran', 'telvanni', 'dwrv' }
+
+-- What a master's objects are, as often as each is listed: mostly things to place and to carry,
+-- then those that hold them.
+local Kinds = {
+  'Static',
+  'Static',
+  'Static',
+  'Static',
+  'Static',
+  'Static',
+  'Activator',
+  'Door',
+  'Sound',
+  'Sound',
+  'Script',
+  'Script',
+  'Spell',
+  'Spell',
+  'Spell',
+  'Enchanting',
+  'Bodypart',
+  'Bodypart',
+  'MiscItem',
+  'MiscItem',
+  'Weapon',
+  'Weapon',
+  'Weapon',
+  'Book',
+  'Armor',
+  'Clothing',
+  'Light',
+  'Ingredient',
+  'Container',
+  'Container',
+  'LeveledItem',
+  'LeveledCreature',
+  'Creature',
+  'Npc',
+  'Npc',
+  'Npc',
+  'Npc',
+  'Faction',
+  'Region',
+  'SoundGen',
+}
+
+-- Objects `@tes3conv` writes as a plugin from the fields given here alone.
+local FileKinds =
+  { 'Static', 'Static', 'Static', 'Script', 'Spell', 'MiscItem', 'MiscItem', 'Container', 'Npc' }
+
+-- The ids an object can name, by what names them: a script by what runs it, a thing to carry by
+-- what holds it, and whatever a cell can place.
+type Pools = { [string]: { string } }
+
+local PoolOf: { [string]: string } = {
+  Static = 'statics',
+  Activator = 'statics',
+  Door = 'statics',
+  Sound = 'sounds',
+  Script = 'scripts',
+  Spell = 'spells',
+  Enchanting = 'enchantings',
+  Bodypart = 'bodyparts',
+  MiscItem = 'items',
+  Weapon = 'items',
+  Book = 'items',
+  Armor = 'items',
+  Clothing = 'items',
+  Light = 'items',
+  Ingredient = 'items',
+  LeveledItem = 'items',
+  Container = 'holders',
+  Creature = 'creatures',
+  LeveledCreature = 'creatures',
+  Npc = 'actors',
+  Faction = 'factions',
+  Region = 'regions',
+  SoundGen = 'generators',
+}
+
+local Placed: { [string]: boolean } =
+  { statics = true, items = true, holders = true, creatures = true, actors = true }
+
+-- The pools an object of any kind draws from, whatever kinds the files hold.
+local Named = { 'sounds', 'scripts', 'spells', 'enchantings', 'bodyparts', 'factions', 'creatures' }
+
+local function newPools(): Pools
+  local pools: Pools = { placed = {}, races = {}, classes = {} }
+
+  for _, name in PoolOf do
+    pools[name] = pools[name] or {}
+  end
+
+  -- A pool nothing was added to still has an id to give: one no file defines.
+  for _, name in Named do
+    table.insert(pools[name], `no_{name}`)
+  end
+
+  return pools
+end
+
+local function add(pools: Pools, kind: string, id: string)
+  local name = PoolOf[kind]
+  table.insert(pools[name], id)
+
+  if Placed[name] then table.insert(pools.placed, id) end
+end
+
+--- `count` things `held` by something: each a number and an id, as tes3conv has an inventory.
+local function inventory(held: { string }, count: number): { Value }
+  local items: { Value } = {}
+
+  for index = 1, count do
+    items[index] = { nextRandom() % 5 + 1, pick(held) }
+  end
+
+  return items
+end
+
+local function spells(pools: Pools, count: number): { Value }
+  local known: { Value } = {}
+
+  for index = 1, count do
+    known[index] = pick(pools.spells)
+  end
+
+  return known
+end
+
+--- An actor's packages: by turns one that follows, escorts, or (where `varied`) activates
+--- something, and none.
+local function packages(pools: Pools, varied: boolean): { Value }
+  local turn = nextRandom() % 4
+
+  if turn == 3 then return {} end
+
+  if turn == 2 and varied then return { { type = 'Activate', target = pick(pools.placed) } } end
+
+  return {
+    {
+      type = if turn == 1 and varied then 'Escort' else 'Follow',
+      target = pick(pools.actors),
+      cell = if nextRandom() % 2 == 0 then '' else pick(pools.placed),
+      duration = 0,
+      location = { 0, 0, 0 },
+      reset = 0,
+    },
+  }
+end
+
+--- An NPC of one of the first `races` races and `classes` classes.
+local function actor(
+  id: string,
+  pools: Pools,
+  races: number,
+  classes: number,
+  varied: boolean
+): Record
+  return {
+    type = 'Npc',
+    flags = '',
+    id = id,
+    name = id,
+    script = maybe(pools.scripts, 6),
+    race = pools.races[nextRandom() % races + 1],
+    class = pools.classes[nextRandom() % classes + 1],
+    faction = maybe(pools.factions, 3),
+    head = pick(pools.bodyparts),
+    hair = pick(pools.bodyparts),
+    npcFlags = if nextRandom() % 2 == 0 then 'FEMALE' else '',
+    inventory = inventory(pools.items, nextRandom() % 6 + 2),
+    spells = spells(pools, nextRandom() % 4),
+    aiPackages = packages(pools, varied),
+  }
+end
+
+--- An object of `kind` naming what one of its kind names, out of `pools`.
+local function object(kind: string, id: string, pools: Pools, varied: boolean): Record
+  local record: Record = { type = kind, flags = '', id = id }
+  local pool = PoolOf[kind]
+
+  if kind == 'Npc' then
+    return actor(id, pools, #pools.races, #pools.classes, varied)
+  elseif kind == 'Script' then
+    record.text = `begin {id}\nend`
+  elseif kind == 'Container' then
+    record.script = maybe(pools.scripts, 8)
+    record.inventory = inventory(pools.items, nextRandom() % 5 + 1)
+  elseif kind == 'Creature' then
+    record.script = maybe(pools.scripts, 8)
+    record.inventory = inventory(pools.items, nextRandom() % 3)
+    record.spells = spells(pools, nextRandom() % 3)
+    record.aiPackages = packages(pools, varied)
+    record.sound = maybe(pools.creatures, 2)
+  elseif kind == 'LeveledItem' then
+    local items: { Value } = {}
+
+    for index = 1, nextRandom() % 6 + 2 do
+      items[index] = { pick(pools.items), index }
+    end
+
+    record.items = items
+  elseif kind == 'LeveledCreature' then
+    local creatures: { Value } = {}
+
+    for index = 1, nextRandom() % 5 + 2 do
+      creatures[index] = { pick(pools.creatures), index }
+    end
+
+    record.creatures = creatures
+  elseif kind == 'Door' then
+    record.script = maybe(pools.scripts, 8)
+    record.openSound, record.closeSound = maybe(pools.sounds, 2), maybe(pools.sounds, 2)
+  elseif kind == 'Bodypart' then
+    record.race = pick(pools.races)
+  elseif kind == 'Faction' then
+    record.reactions = { { faction = pick(pools.factions), reaction = 1 } }
+  elseif kind == 'Region' then
+    record.sleepCreature = pick(pools.creatures)
+    record.sounds = { { pick(pools.sounds), 10 }, { pick(pools.sounds), 20 } }
+  elseif kind == 'SoundGen' then
+    record.creature, record.sound = pick(pools.creatures), pick(pools.sounds)
+  elseif pool == 'items' or kind == 'Activator' then
+    record.script = maybe(pools.scripts, 4)
+
+    if kind == 'Light' then record.sound = maybe(pools.sounds, 2) end
+
+    if kind == 'Weapon' or kind == 'Book' or kind == 'Armor' or kind == 'Clothing' then
+      record.enchanting = maybe(pools.enchantings, 3)
+    end
+
+    if kind == 'Armor' or kind == 'Clothing' then
+      record.bipedObjects = {
+        { maleBodypart = pick(pools.bodyparts), femaleBodypart = maybe(pools.bodyparts, 2) },
+        { maleBodypart = maybe(pools.bodyparts, 2), femaleBodypart = '' },
+      }
+    end
+  end
+
+  return record
+end
+
+--- Adds `count` objects of `kinds` to `list`, their ids starting `stem`, each naming what the
+--- pools held before it and what the others add. Every fiftieth is deleted.
+local function objects(list: Records, stem: string, count: number, kinds: { string }, pools: Pools)
+  local varied = kinds == Kinds
+  local ids: { string }, types: { string } = {}, {}
+
+  for index = 1, count do
+    ids[index], types[index] = `{stem}{pick(Words)}_{pick(Words)}_{index}`, pick(kinds)
+    add(pools, types[index], ids[index])
+  end
+
+  for index = 1, count do
+    local made = object(types[index], ids[index], pools, varied)
+
+    if index % 50 == 0 then made.flags = 'DELETED' end
+
+    table.insert(list, made)
+  end
+end
+
+local function header(fileType: string, masters: { Value }): Record
+  return {
+    type = 'Header',
+    flags = '',
+    version = 1.2999999523162842,
+    fileType = fileType,
+    author = '',
+    description = '',
+    numObjects = 0,
+    masters = masters,
+  }
+end
+
+--- What every master has and addVanillaRefs copies whole: game settings, races, classes, and
+--- (where `varied`) magic effects, each naming the sounds and the things it is seen by.
+local function foundations(list: Records, pools: Pools, settings: number, varied: boolean)
+  for index = 1, settings do
+    local id = `sSetting{index}`
+    table.insert(
+      list,
+      { type = 'GameSetting', flags = '', id = id, value = { type = 'String', data = id } }
+    )
+  end
+
+  for index = 1, 10 do
+    local id = `race {index}`
+    table.insert(list, { type = 'Race', flags = '', id = id, name = id, spells = spells(pools, 2) })
+  end
+
+  for index = 1, 20 do
+    local id = `class {index}`
+    table.insert(list, { type = 'Class', flags = '', id = id, name = id })
+  end
+
+  if not varied then return end
+
+  for index = 1, 48 do
+    table.insert(list, {
+      type = 'MagicEffect',
+      flags = '',
+      effectId = `Effect{index}`,
+      castSound = pick(pools.sounds),
+      boltSound = maybe(pools.sounds, 2),
+      hitSound = pick(pools.sounds),
+      areaSound = maybe(pools.sounds, 2),
+      castVisual = pick(pools.statics),
+      boltVisual = maybe(pools.statics, 2),
+      hitVisual = pick(pools.statics),
+      areaVisual = maybe(pools.statics, 2),
+    })
+  end
+end
+
+local function topic(id: string, kind: string): Record
+  return { type = 'Dialogue', flags = '', id = id, dialogueType = kind }
+end
+
+local function info(id: string, previous: string, following: string): Record
+  return {
+    type = 'DialogueInfo',
+    flags = '',
+    id = id,
+    prevId = previous,
+    nextId = following,
+    speakerId = '',
+    speakerRace = '',
+    speakerClass = '',
+    speakerFaction = '',
+    speakerCell = '',
+    playerFaction = '',
+    soundPath = '',
+    text = `says {id}`,
+    scriptText = '',
+    filters = {},
+    data = {
+      dialogueType = 'Topic',
+      disposition = 0,
+      speakerRank = -1,
+      speakerSex = 'Any',
+      playerRank = -1,
+    },
+  }
+end
+
+--- Says who an INFO is for: by turns anyone, one of the plugin's `actors` actors, one of a
+--- master's, a race, a class, both, a faction, and someone no file has.
+local function said(line: Record, pools: Pools, actors: number): Record
+  local turn = nextRandom() % 10
+  local own = `sw_actor_{nextRandom() % math.max(actors, 1) + 1}`
+
+  if turn == 2 then
+    line.speakerId = own
+  elseif turn == 3 then
+    line.speakerId = pick(pools.actors)
+  elseif turn == 4 then
+    line.speakerRace = pick(pools.races)
+  elseif turn == 5 then
+    line.speakerClass = pick(pools.classes)
+  elseif turn == 6 then
+    line.speakerRace, line.speakerClass = pick(pools.races), pick(pools.classes)
+  elseif turn == 7 then
+    line.speakerFaction = pick(pools.factions)
+  elseif turn == 8 then
+    line.speakerId, line.speakerRace = own, pick(pools.races)
+  elseif turn == 9 then
+    line.speakerId = `missing_{nextRandom() % 64}`
+  end
+
+  if nextRandom() % 16 == 0 then line.playerFaction = pick(pools.factions) end
+
+  return line
+end
+
+-- A master's topics by turns: the greetings, which are many times as long as the others, the
+-- other two kinds the engine asks for itself, a journal, and topics.
+local TopicKinds = { 'Greeting', 'Voice', 'Persuasion', 'Journal' }
+
+local function topicKind(index: number): string return TopicKinds[index % 16 + 1] or 'Topic' end
+
+--- How much of each thing the four files hold.
+type Shape = {
+  --- Morrowind's objects. Tribunal has a quarter as many and Bloodmoon an eighth, and each has
+  --- its own of one in thirty-two of Morrowind's besides.
+  objects: number,
+  --- The plugin's own objects, and its actors besides: the NPCs dialogue is kept for.
+  own: number,
+  actors: number,
+  --- The plugin's cells, each of `references`.
+  cells: number,
+  references: number,
+  --- Morrowind's topics, each of `infos` INFOs, a greeting of twelve times as many; and the
+  --- topics only the plugin has, each of six.
+  topics: number,
+  infos: number,
+  ownTopics: number,
+}
+
+type World = { plugin: Records, bases: { Records } }
+
+--- The four files of `shape`. The same shape makes the same four, record for record. `kinds`
+--- are the types their objects are of: `Kinds` for every part of a run, `FileKinds` for records
+--- to write as plugins, each of which `finish` then gives every field its type has.
+local function world(
+  shape: Shape,
+  kinds: { string },
+  finish: ((record: Record) -> Record)?
+): World
+  random = 0x2545f491
+  local varied = kinds == Kinds
+  local pools = newPools()
+  local morrowind: Records = { header('Esm', {}) }
+  local tribunal: Records = { header('Esm', { { Names[3], 1 } }) }
+  local bloodmoon: Records = { header('Esm', { { Names[3], 1 } }) }
+  local plugin: Records = { header('Esp', { { Names[3], 1 }, { Names[2], 1 }, { Names[1], 1 } }) }
+
+  for index = 1, 10 do
+    pools.races[index] = `race {index}`
+  end
+
+  for index = 1, 20 do
+    pools.classes[index] = `class {index}`
+  end
+
+  foundations(morrowind, pools, shape.objects // 16, varied)
+  objects(morrowind, '', shape.objects, kinds, pools)
+  local theirs = table.clone(pools.items)
+
+  -- An expansion's own of Morrowind's things: spelled in capitals, and found before Morrowind's.
+  for position, list in { tribunal, bloodmoon } do
+    foundations(list, pools, shape.objects // (32 * position), varied)
+    local stem = if position == 1 then 'tr_' else 'bm_'
+    objects(list, stem, shape.objects // (4 * position), kinds, pools)
+
+    for index = position, shape.objects // 16, 2 do
+      local id = string.upper(theirs[(index * 7919) % #theirs + 1])
+      table.insert(list, { type = 'MiscItem', flags = '', id = id, script = pick(pools.scripts) })
+    end
+  end
+
+  -- What the plugin's own things name: its own, and one in six of the masters'.
+  local mine = newPools()
+  mine.races, mine.classes = pools.races, pools.classes
+
+  for name, ids in pools do
+    if name == 'races' or name == 'classes' then continue end
+
+    for index = 6, #ids, 6 do
+      table.insert(mine[name], ids[index])
+    end
+  end
+
+  objects(plugin, 'sw_', shape.own, kinds, mine)
+
+  for index = 1, shape.actors do
+    local made = actor(`sw_actor_{index}`, mine, 5, 10, varied)
+    table.insert(mine.actors, made.id :: string)
+    table.insert(mine.placed, made.id :: string)
+    table.insert(plugin, made)
+  end
+
+  if varied then
+    for index = 1, 6 do
+      local effect = `Effect{(index + 1) // 2}`
+      table.insert(plugin, { type = 'MagicEffect', flags = '', effectId = effect })
+    end
+  end
+
+  for index = 1, shape.cells do
+    local references: { Value } = {}
+
+    for place = 1, shape.references do
+      local reference: Table = {
+        mastIndex = 0,
+        refrIndex = place,
+        id = pick(mine.placed),
+        temporary = true,
+        translation = { nextRandom() % 8192, nextRandom() % 8192, nextRandom() % 1024 },
+        rotation = { 0, 0, 0 },
+      }
+
+      if place % 8 == 0 then reference.owner = pick(mine.actors) end
+
+      if varied and place % 16 == 1 then reference.ownerFaction = pick(mine.factions) end
+
+      if place % 32 == 2 then reference.key = pick(mine.items) end
+
+      if place % 32 == 3 then reference.trap = pick(mine.spells) end
+
+      if place % 64 == 4 then reference.soul = pick(mine.creatures) end
+
+      references[place] = reference
+    end
+
+    table.insert(plugin, {
+      type = 'Cell',
+      flags = '',
+      name = `Hangar {index}`,
+      data = { flags = 'IS_INTERIOR', grid = { 0, 0 } },
+      references = references,
+    })
+  end
+
+  for index = 1, shape.topics do
+    local kind = topicKind(index)
+    local stem = `{index}0`
+    local count = if kind == 'Greeting' then shape.infos * 12 else shape.infos
+    table.insert(morrowind, topic(`topic {index}`, kind))
+
+    for place = 1, count do
+      local previous = if place > 1 then `{stem}{place - 1}` else ''
+      local following = if place < count then `{stem}{place + 1}` else ''
+      local line = said(info(`{stem}{place}`, previous, following), pools, shape.actors)
+
+      if place % 40 == 0 then line.flags = 'DELETED' end
+
+      table.insert(morrowind, line)
+    end
+
+    -- What an expansion does to a topic of Morrowind's: an INFO changed where it stands, one
+    -- moved down the chain, and one put between two; or one at the front and one deleted.
+    if index % 3 == 0 then
+      table.insert(tribunal, topic(`TOPIC {index}`, kind))
+      table.insert(tribunal, said(info(`{stem}2`, `{stem}1`, `{stem}3`), pools, shape.actors))
+      table.insert(tribunal, said(info(`{stem}3`, `{stem}5`, `{stem}6`), pools, shape.actors))
+      table.insert(tribunal, said(info(`tr{stem}1`, `{stem}1`, `{stem}2`), pools, shape.actors))
+    end
+
+    if index % 7 == 0 then
+      local gone = info(`{stem}4`, `{stem}3`, `{stem}5`)
+      gone.flags = 'DELETED'
+      table.insert(bloodmoon, topic(`topic {index}`, kind))
+      table.insert(bloodmoon, said(info(`bm{stem}1`, '', `{stem}1`), pools, shape.actors))
+      table.insert(bloodmoon, gone)
+    end
+
+    -- And the plugin: its own of the first INFO, and one after the second.
+    if index % 5 == 0 then
+      table.insert(plugin, topic(`Topic {index}`, kind))
+      table.insert(plugin, said(info(`{stem}1`, '', `{stem}2`), mine, shape.actors))
+      table.insert(plugin, said(info(`sw{stem}1`, `{stem}2`, `{stem}3`), mine, shape.actors))
+    end
+  end
+
+  for index = 1, shape.ownTopics do
+    local stem = `sw{index}00`
+    table.insert(plugin, topic(`starwind topic {index}`, 'Topic'))
+
+    for place = 1, 6 do
+      local previous = if place > 1 then `{stem}{place - 1}` else ''
+      local following = if place < 6 then `{stem}{place + 1}` else ''
+      table.insert(plugin, said(info(`{stem}{place}`, previous, following), mine, shape.actors))
+    end
+  end
+
+  -- Scripts that add topics of Morrowind's, among lines that don't.
+  for index = 1, shape.topics // 8 do
+    local lines = {
+      `begin sw_topics_{index}`,
+      '; AddTopic "topic 1"',
+      `  AddTopic "topic {index * 8 - 1}"\r`,
+      'short done',
+      `addtopic topic{index}`,
+      `AddTopic "Topic {index * 8 - 3}"`,
+      'end',
+    }
+
+    table.insert(plugin, {
+      type = 'Script',
+      flags = '',
+      id = `sw_topics_{index}`,
+      text = table.concat(lines, '\n'),
+    })
+  end
+
+  local made: World = { plugin = plugin, bases = { bloodmoon, tribunal, morrowind } }
+
+  if not finish then return made end
+
+  for _, list in { plugin, bloodmoon, tribunal, morrowind } do
+    for index, record in list do
+      list[index] = finish(record)
+    end
+  end
+
+  return made
+end
+
+--- A workload that runs `made`'s plugin over its masters.
+local function running(made: World): () -> Table
+  local options = { names = Names }
+
+  return function()
+    local decoupled, log = addVanillaRefs.run(made.plugin, made.bases, options)
+    return { records = decoupled, log = log }
+  end
+end
+
+--- `made`'s sizes, for a workload's name: the plugin's records, and the masters' together.
+local function sizes(made: World): string
+  local theirs = #made.bases[1] + #made.bases[2] + #made.bases[3]
+  return `a plugin of {#made.plugin} records over masters of {theirs}`
+end
+
+local Whole: Shape = {
+  objects = 8000,
+  own = 1500,
+  actors = 200,
+  cells = 48,
+  references = 256,
+  topics = 480,
+  infos = 10,
+  ownTopics = 60,
+}
+
+local whole = world(Whole, Kinds)
+workload(`{sizes(whole)}: the whole run`, '77421cc95904a71d', running(whole))
+
+local Objects: Shape = {
+  objects = 12000,
+  own = 4000,
+  actors = 400,
+  cells = 0,
+  references = 0,
+  topics = 0,
+  infos = 0,
+  ownTopics = 0,
+}
+
+local objectsOnly = world(Objects, Kinds)
+workload(`{sizes(objectsOnly)}: objects alone`, '0f0bc79ab1a05a2c', running(objectsOnly))
+
+local Cells: Shape = {
+  objects = 4000,
+  own = 400,
+  actors = 40,
+  cells = 64,
+  references = 512,
+  topics = 0,
+  infos = 0,
+  ownTopics = 0,
+}
+
+local cellsOnly = world(Cells, Kinds)
+workload(`{sizes(cellsOnly)}: cells of 512 references`, 'f176c23f58444be5', running(cellsOnly))
+
+local Dialogue: Shape = {
+  objects = 800,
+  own = 100,
+  actors = 300,
+  cells = 0,
+  references = 0,
+  topics = 960,
+  infos = 12,
+  ownTopics = 120,
+}
+
+local dialogueOnly = world(Dialogue, Kinds)
+workload(`{sizes(dialogueOnly)}: dialogue`, '7bfae2ef0f67765a', running(dialogueOnly))
+
+if not scratch then return end
+
+--- A record of its type with every field the type has, `fields` over the type's defaults: what
+--- the plugin encoder needs of one.
+local function full(fields: Record): Record
+  local kind = fields.type :: string
+  local record = assert(core.default(kind), `no record type {kind}`) :: Record
+
+  for key, value in fields do
+    record[key] = value
+  end
+
+  return record
+end
+
+local Files: Shape = {
+  objects = 2400,
+  own = 300,
+  actors = 40,
+  cells = 12,
+  references = 128,
+  topics = 96,
+  infos = 8,
+  ownTopics = 12,
+}
+
+local files = world(Files, FileKinds, full)
+local folder = jess.fs.join(scratch, 'add-vanilla-refs-bench')
+jess.fs.createDir(folder)
+
+local function write(name: string, list: Records)
+  local built = tes3conv.plugin(list)
+  built:updateRecordCount()
+  jess.fs.write(jess.fs.join(folder, name), built:save(), { backup = false })
+end
+
+write(PluginName, files.plugin)
+
+for position, name in Names do
+  write(name, files.bases[position])
+end
+
+workload(`commands.run, a dry run: {sizes(files)}, as files`, 'f97ee89d2a1640eb', function()
+  local result = commands.run { folder = folder, dryRun = true }
+  local counts = assert(result.records, 'the files the bench wrote are missing')
+
+  return {
+    log = result.log,
+    plugin = counts.plugin,
+    output = counts.output,
+    written = result.written,
+  }
+end)
