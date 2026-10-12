@@ -73,6 +73,11 @@ local function lower(value: Value?): string
   return made
 end
 
+-- Most records have no flags at all, and one without isn't deleted.
+local function isDeleted(record: Record): boolean
+  return record.flags ~= '' and tes3.isDeleted(record)
+end
+
 local function tag(record: Record): string return tes3.Tags[record.type :: string] or '????' end
 
 local function list(value: Value?): { Value } return (value or {}) :: { Value } end
@@ -473,7 +478,7 @@ local function vanillaIndex(bases: { Records }): ({ { [string]: Record } }, { Re
     for _, record in records do
       local kind = record.type :: string
 
-      if NeverCopy[kind] or tes3.isDeleted(record) then continue end
+      if NeverCopy[kind] or isDeleted(record) then continue end
 
       if Foundations[kind] then table.insert(founding, record) end
 
@@ -570,7 +575,7 @@ local function addRefs(state: State, includeDialogue: boolean, pass: string)
   local pending: { Pending } = {}
 
   for _, record in state.plugin do
-    if tes3.isDeleted(record) or (not includeDialogue and record.type == 'DialogueInfo') then
+    if isDeleted(record) or (not includeDialogue and record.type == 'DialogueInfo') then
       continue
     end
 
@@ -738,7 +743,7 @@ local function dialogueIds(records: Records): { [string]: { [string]: boolean } 
 
       local id = lower(record.id)
 
-      if id ~= '' and not tes3.isDeleted(record) then
+      if id ~= '' and not isDeleted(record) then
         local set = ids[topic :: string] or {}
         ids[topic :: string] = set
         set[id] = true
@@ -757,7 +762,7 @@ local function population(records: Records): { Actor }
   local actors = {}
 
   for _, record in records do
-    if tes3.isDeleted(record) then continue end
+    if isDeleted(record) then continue end
 
     if record.type == 'Npc' then
       table.insert(
@@ -776,7 +781,7 @@ local function printPopulation(records: Records, log: Log)
   table.insert(log, 'Dialogue liveness population begin')
 
   for _, record in records do
-    if tes3.isDeleted(record) then continue end
+    if isDeleted(record) then continue end
 
     if record.type == 'Npc' then
       local sex = if tes3.hasFlag(record.npcFlags, 'FEMALE') then 'female' else 'male'
@@ -926,7 +931,7 @@ local function decoupleDialogue(state: State)
     local why = live[topic]
 
     for _, info in infos(group) do
-      if tes3.isDeleted(info) then continue end
+      if isDeleted(info) then continue end
 
       local id = lower(info.id)
       counts.effective += 1
@@ -978,7 +983,7 @@ local function decoupleDialogue(state: State)
     local survivors = {}
 
     for _, info in infos(group) do
-      if not tes3.isDeleted(info) and ids[lower(info.id)] then table.insert(survivors, info) end
+      if not isDeleted(info) and ids[lower(info.id)] then table.insert(survivors, info) end
     end
 
     for index, info in survivors do
@@ -1157,7 +1162,7 @@ function addVanillaRefs.run(
   local effects: { Record } = {}
 
   for _, record in records do
-    if tes3.isDeleted(record) then continue end
+    if isDeleted(record) then continue end
 
     if record.type == 'MagicEffect' then
       local duplicate = false
