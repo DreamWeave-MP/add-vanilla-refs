@@ -376,7 +376,38 @@ type State = {
   --- `vanillaIndex`'s two, made once a run: the masters don't change during one.
   index: { { [string]: Record } },
   foundations: { Records },
+  --- What each record the first pass asked needs, and what asking it printed (see `needs`);
+  --- and whether this is the first pass.
+  needs: { [Record]: { [string]: boolean } },
+  printed: { [Record]: { string } },
+  first: boolean,
 }
+
+-- `collect_required_ids_from_object`, worked out once for a record. The second pass asks every
+-- record the first asked that is still in the plugin, and none of them has changed: it is
+-- answered with what the first was, and what that printed is printed again.
+local function needs(state: State, record: Record): { [string]: boolean }
+  local log = state.log
+  local known = state.needs[record]
+
+  if known then
+    local printed = state.printed[record]
+
+    if printed then table.move(printed, 1, #printed, #log + 1, log) end
+
+    return known
+  end
+
+  if not state.first then return requiredIds(record, log) end
+
+  local from = #log + 1
+  local ids = requiredIds(record, log)
+  state.needs[record] = ids
+
+  if #log >= from then state.printed[record] = log[from:#log] end
+
+  return ids
+end
 
 local function enqueue(
   state: State,
@@ -389,7 +420,7 @@ local function enqueue(
 
   -- `resolve` passes over an id that is defined, and what is defined stays so: nothing is
   -- pending for one.
-  for id in requiredIds(record, state.log) do
+  for id in needs(state, record) do
     if required[id] then continue end
 
     required[id] = true
@@ -1100,6 +1131,9 @@ function addVanillaRefs.run(
     log = {},
     index = {},
     foundations = {},
+    needs = {},
+    printed = {},
+    first = true,
   }
 
   for _, record in records do
@@ -1113,6 +1147,7 @@ function addVanillaRefs.run(
   state.index, state.foundations = vanillaIndex(bases)
   -- Dirty vanilla INFOs mustn't bootstrap their speakers into the population dialogue is kept by.
   addRefs(state, false, 'pre-dialogue')
+  state.first = false
   sanitizePackageCells(state)
   printPopulation(records, state.log)
   decoupleDialogue(state)
