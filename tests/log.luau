@@ -319,6 +319,62 @@ suite.describe('log', function()
     expect(#lines(log, '  source=CELL \'Yard\'')).toBe(1)
   end)
 
+  suite.it('prints what a record names in both passes, a copied and a mended one\'s too', function()
+    local pilot = typed('Npc', 'Pilot', {
+      aiPackages = {
+        { type = 'Activate', target = 'Lever' },
+        { type = 'Escort', target = 'Guide', cell = 'nowhere' },
+      },
+    })
+
+    local hall = cell('Hall', { reference(1, 'Crate', { owner = 'Pilot' }), reference(2, 'Lever') })
+    local guide = typed('Npc', 'guide', { aiPackages = { { type = 'Activate', target = 'Crate' } } })
+    local result, log = addVanillaRefs.run(
+      { header(), pilot, hall },
+      { { header(), typed('Activator', 'lever'), guide, misc 'crate' } },
+      Names
+    )
+
+    -- The escort's cell isn't defined, so the second pass asks a copy of the pilot.
+    expect(result[2] ~= pilot).toBe(true)
+    expect(result[2].aiPackages[2].cell).toBe 'igtestcell'
+    expect(log).toEqual {
+      'lever added as an activation target',
+      'Crate added to Starwind.esp as a cell reference in Hall',
+      'pilot added to Starwind.esp as an owner reference',
+      'Lever added to Starwind.esp as a cell reference in Hall',
+      'Copying \'crate\' (MISC) to \'Starwind.esp\' from \'Bloodmoon.esm\'',
+      'Dependency import:',
+      '  pass=pre-dialogue',
+      '  target=MISC \'crate\'',
+      '  source=CELL \'Hall\'',
+      '  field=reference.id',
+      'Copying \'guide\' (NPC_) to \'Starwind.esp\' from \'Bloodmoon.esm\'',
+      'Dependency import:',
+      '  pass=pre-dialogue',
+      '  target=NPC_ \'guide\'',
+      '  source=NPC_ \'Pilot\'',
+      '  field=ai_package.target',
+      'crate added as an activation target',
+      'Copying \'lever\' (ACTI) to \'Starwind.esp\' from \'Bloodmoon.esm\'',
+      'Dependency import:',
+      '  pass=pre-dialogue',
+      '  target=ACTI \'lever\'',
+      '  source=NPC_ \'Pilot\'',
+      '  field=ai_package.target',
+      Quiet[1],
+      'Dialogue liveness actor\tNpc\tPilot\t\t\tmale',
+      'Dialogue liveness actor\tNpc\tguide\t\t\tmale',
+      Quiet[2],
+      Quiet[3],
+      'lever added as an activation target',
+      'Crate added to Starwind.esp as a cell reference in Hall',
+      'pilot added to Starwind.esp as an owner reference',
+      'Lever added to Starwind.esp as a cell reference in Hall',
+      'crate added as an activation target',
+    }
+  end)
+
   suite.it('lists the actors dialogue is kept by, the ones it copied among them', function()
     local ghost = typed('Npc', 'Ghost', { race = 'Dunmer', class = 'Mage' })
     ghost.flags = 'DELETED'
