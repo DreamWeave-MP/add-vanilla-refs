@@ -114,13 +114,7 @@ end
 
 --- The log's lines that start with `prefix`, in order.
 local function lines(log: { string }, prefix: string): { string }
-  local found = {}
-
-  for _, line in log do
-    if string.sub(line, 1, #prefix) == prefix then table.insert(found, line) end
-  end
-
-  return found
+  return [for line in log if string.sub(line, 1, #prefix) == prefix => line]
 end
 
 --- Each import the log reports: the field that asked for it, by the id it copied.

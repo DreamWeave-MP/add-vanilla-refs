@@ -72,37 +72,26 @@ local function info(id: string, prev: string?, next: string?, fields: Record?): 
 end
 
 local function ids(records: { Record }): { string }
-  local list = {}
-
-  for _, record in records do
-    if record.type ~= 'Header' then
-      table.insert(list, `{record.type}:{record.id or record.name or record.effectId}`)
-    end
-  end
-
-  return list
+  return [
+    for record in records
+    if record.type ~= 'Header'
+    => `{record.type}:{record.id or record.name or record.effectId}`
+  ]
 end
 
 local function has(records: { Record }, id: string): boolean
-  for _, record in records do
-    if type(record.id) == 'string' and string.lower(record.id) == string.lower(id) then
-      return true
-    end
-  end
-
-  return false
+  return any[
+    for record in records
+    => type(record.id) == 'string' and string.lower(record.id) == string.lower(id)
+  ]
 end
 
 local function chain(records: { Record }): { string }
-  local list = {}
-
-  for _, record in records do
-    if record.type == 'DialogueInfo' then
-      table.insert(list, `{record.id}<{record.prevId}|{record.nextId}>`)
-    end
-  end
-
-  return list
+  return [
+    for {type: kind, id, prevId, nextId} in records
+    if kind == 'DialogueInfo'
+    => `{id}<{prevId}|{nextId}>`
+  ]
 end
 
 suite.describe('add-vanilla-refs', function()

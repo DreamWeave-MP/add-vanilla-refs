@@ -24,13 +24,7 @@ end
 
 --- The log's lines that start with `prefix`, in order.
 local function starting(log: { string }, prefix: string): { string }
-  local found = {}
-
-  for _, line in log do
-    if string.sub(line, 1, #prefix) == prefix then table.insert(found, line) end
-  end
-
-  return found
+  return [for line in log if string.sub(line, 1, #prefix) == prefix => line]
 end
 
 suite.describe('run', function()
