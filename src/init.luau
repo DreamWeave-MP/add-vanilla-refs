@@ -250,33 +250,18 @@ local function requiredIds(record: Record, log: Log): { [string]: boolean }
 end
 
 local function packageTargets(record: Record, matches: (Value?) -> boolean): boolean
-  for _, package in list(record.aiPackages) do
-    local ai = package :: Table
-
-    if
-      (ai.type == 'Activate' or ai.type == 'Escort' or ai.type == 'Follow') and matches(ai.target)
-    then
-      return true
-    end
-  end
-
-  return false
+  return any[
+    for {type: kind, target} in list(record.aiPackages) :: { Table }
+    => (kind == 'Activate' or kind == 'Escort' or kind == 'Follow') and matches(target)
+  ]
 end
 
 local function inventoryHolds(record: Record, matches: (Value?) -> boolean): boolean
-  for _, item in list(record.inventory) do
-    if matches((item :: Table)[2]) then return true end
-  end
-
-  return false
+  return any[for item in list(record.inventory) => matches((item :: Table)[2])]
 end
 
 local function spellsHold(record: Record, matches: (Value?) -> boolean): boolean
-  for _, spell in list(record.spells) do
-    if matches(spell) then return true end
-  end
-
-  return false
+  return any[for spell in list(record.spells) => matches(spell)]
 end
 
 -- `dependency_field` for a cell, of every id its references name at once: the first reference
@@ -440,12 +425,16 @@ local function enqueue(
   end
 end
 
-local function logImport(state: State, record: Record, cause: Cause)
+local function logImport(
+  state: State,
+  record: Record,
+  {pass, sourceType, sourceId: source, field}: Cause
+)
   table.insert(state.log, 'Dependency import:')
-  table.insert(state.log, `  pass={cause.pass}`)
+  table.insert(state.log, `  pass={pass}`)
   table.insert(state.log, `  target={tag(record)} '{tes3.editorId(record)}'`)
-  table.insert(state.log, `  source={cause.sourceType} '{cause.sourceId}'`)
-  table.insert(state.log, `  field={cause.field}`)
+  table.insert(state.log, `  source={sourceType} '{source}'`)
+  table.insert(state.log, `  field={field}`)
 end
 
 local Foundations: { [string]: boolean } =
@@ -836,12 +825,13 @@ local function actorIndex(actors: { Actor }): ActorIndex
   local index: ActorIndex = { byId = {}, races = {}, classes = {}, pairs = {} }
 
   for _, actor in actors do
-    local same = index.byId[actor.id] or {}
-    index.byId[actor.id] = same
+    local {id, race, class} = actor
+    local same = index.byId[id] or {}
+    index.byId[id] = same
     table.insert(same, actor)
-    index.races[actor.race] = true
-    index.classes[actor.class] = true
-    index.pairs[`{actor.race}\0{actor.class}`] = true
+    index.races[race] = true
+    index.classes[class] = true
+    index.pairs[`{race}\0{class}`] = true
   end
 
   return index
@@ -854,13 +844,10 @@ local function canMatchActor(info: Record, index: ActorIndex): boolean
     lower(info.speakerId), lower(info.speakerRace), lower(info.speakerClass)
 
   if speaker ~= '' then
-    for _, actor in index.byId[speaker] or {} do
-      if (race == '' or actor.race == race) and (class == '' or actor.class == class) then
-        return true
-      end
-    end
-
-    return false
+    return any[
+      for actor in index.byId[speaker] or {}
+      => (race == '' or actor.race == race) and (class == '' or actor.class == class)
+    ]
   elseif race ~= '' and class ~= '' then
     return index.pairs[`{race}\0{class}`] == true
   elseif race ~= '' then
@@ -970,11 +957,8 @@ local function decoupleDialogue(state: State)
   end
 
   local function appendLive(rebuilt: Records, group: Group, ids: { [string]: boolean })
-    local survivors = {}
-
-    for _, info in infos(group) do
-      if not isDeleted(info) and ids[lower(info.id)] then table.insert(survivors, info) end
-    end
+    local survivors =
+      [for info in infos(group) if not isDeleted(info) and ids[lower(info.id)] => info]
 
     for index, info in survivors do
       local copy = table.clone(info)
@@ -1067,12 +1051,7 @@ local function decoupleDialogue(state: State)
   table.sort(materialized, function(left, right) return left.topic < right.topic end)
 
   for _, entry in materialized do
-    local quoted = {}
-
-    for _, name in entry.reasons do
-      table.insert(quoted, `"{name}"`)
-    end
-
+    local quoted = [for name in entry.reasons => `"{name}"`]
     table.insert(
       state.log,
       `Dialogue DIAL materialized: topic="{entry.topic}" source=vanilla live_infos={entry.count} topic_reason=[{table.concat(
@@ -1155,16 +1134,7 @@ function addVanillaRefs.run(
     if isDeleted(record) then continue end
 
     if record.type == 'MagicEffect' then
-      local duplicate = false
-
-      for _, other in effects do
-        if tes3.equal(other, record) then
-          duplicate = true
-          break
-        end
-      end
-
-      if duplicate then continue end
+      if any[for other in effects => tes3.equal(other, record)] then continue end
 
       table.insert(effects, record)
     end
