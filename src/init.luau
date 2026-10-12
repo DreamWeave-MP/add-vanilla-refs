@@ -399,6 +399,7 @@ local function enqueue(
   pass: string
 )
   local ids = {}
+  local asked = false
 
   -- `resolve` passes over an id that is defined, and what is defined stays so: nothing is
   -- pending for one.
@@ -406,14 +407,20 @@ local function enqueue(
     if required[id] then continue end
 
     required[id] = true
+    asked = true
 
     if not state.defined[id] then table.insert(ids, id) end
   end
 
+  if not asked then return end
+
+  -- A record that is first to need anything is named, pending or not: `sourceId` refuses a cell
+  -- with no data to name it by, whoever defines what the cell places.
+  local sourceType, source = tag(record), sourceId(record)
+
   if #ids == 0 then return end
 
   table.sort(ids)
-  local sourceType, source = tag(record), sourceId(record)
   local named = if record.type == 'Cell' then referenceFields(record) else nil
 
   for _, id in ids do
