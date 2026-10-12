@@ -288,6 +288,43 @@ suite.describe('log', function()
     expect(#lines(log, '  source=CELL \'Hall\'')).toBe(6)
   end)
 
+  suite.it('names the first of a cell\'s references to name a record, and its id first', function()
+    local hall = cell('Hall', {
+      reference(1, 'Lamp', { owner = 'Shared', key = 'LAMP' }),
+      reference(2, 'Shared', { ownerGlobal = 'A_Global', soul = 'a_soul' }),
+      reference(3, 'Crate', { ownerFaction = 'A_Soul', trap = 'a_global' }),
+    })
+    hall.region = 'Hall_Region'
+    local yard = cell('Yard', { reference(1, 'Yard_Thing', { soul = 'Hall_Region' }) })
+    yard.region = 'yard_thing'
+
+    local _, log = addVanillaRefs.run({ header(), hall, yard }, {
+      {
+        header(),
+        misc 'lamp',
+        misc 'shared',
+        misc 'crate',
+        misc 'yard_thing',
+        typed('GlobalVariable', 'a_global'),
+        typed('Creature', 'a_soul'),
+        typed('Region', 'hall_region'),
+      },
+    }, Names)
+
+    expect(imports(log)).toEqual {
+      lamp = 'reference.id',
+      shared = 'reference.owner',
+      crate = 'reference.id',
+      a_global = 'reference.owner_global',
+      a_soul = 'reference.soul',
+      hall_region = 'region',
+      yard_thing = 'reference.id',
+    }
+
+    expect(#lines(log, '  source=CELL \'Hall\'')).toBe(6)
+    expect(#lines(log, '  source=CELL \'Yard\'')).toBe(1)
+  end)
+
   suite.it('lists the actors dialogue is kept by, the ones it copied among them', function()
     local ghost = typed('Npc', 'Ghost', { race = 'Dunmer', class = 'Mage' })
     ghost.flags = 'DELETED'
