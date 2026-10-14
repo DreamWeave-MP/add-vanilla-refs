@@ -2,7 +2,7 @@
 -- add-vanilla-refs, timed from Luau: `run` over record lists the shape a plugin and its three
 -- masters are, whole and by the part of a run each is mostly made of (the objects a plugin's own
 -- need, the references of its cells, dialogue), and `commands.run` over such a four as files.
--- Run by `jess run --package . --package-path .. bench/bench.luau [filter] [scratch]`, on a
+-- Run by `jess run --package . --package-path .. bench/bench.jsl [filter] [scratch]`, on a
 -- release build. The command is timed only when a scratch folder is given to write the files
 -- into, which takes `--capability filesystem.read --capability filesystem.write`.
 --

@@ -1,6 +1,6 @@
 # add-vanilla-refs benchmarks
 
-`bench/bench.luau` times the package through its public API: `run` over record lists, and
+`bench/bench.jsl` times the package through its public API: `run` over record lists, and
 `commands.run` over plugin files. The lists are made by the bench, the same every run: a plugin
 and its three masters in the order a record is looked up in them (Bloodmoon, Tribunal, Morrowind).
 A master holds objects of 23 types under ids of two words and a number, each naming what its type
@@ -33,7 +33,7 @@ the baseline's: a run that does less, or anything else, fails instead of posting
 ```sh
 jess run --package jpk/add-vanilla-refs --package-path jpk \
   --capability filesystem.read --capability filesystem.write \
-  jpk/add-vanilla-refs/bench/bench.luau [filter] [scratch folder]
+  jpk/add-vanilla-refs/bench/bench.jsl [filter] [scratch folder]
 ```
 
 Without a scratch folder the command isn't timed, and no capability is needed.

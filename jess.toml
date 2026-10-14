@@ -7,11 +7,11 @@ jess_api = "1"
 default_target = "add-vanilla-refs"
 include = ["src"]
 tests = [
-  "tests/run.luau",
-  "tests/log.luau",
-  "tests/commands.luau",
-  "tests/cli.luau",
-  "tests/style.luau",
+  "tests/run.jsl",
+  "tests/log.jsl",
+  "tests/commands.jsl",
+  "tests/cli.jsl",
+  "tests/style.jsl",
 ]
 
 [dependencies]
@@ -19,9 +19,9 @@ tests = [
 "org.dreamweave.tes3conv" = "0.1"
 
 [modules]
-"@add-vanilla-refs" = "src/init.luau"
-"@add-vanilla-refs/commands" = "src/commands.luau"
-"@add-vanilla-refs/cli" = "src/cli.luau"
+"@add-vanilla-refs" = "src/init.jsl"
+"@add-vanilla-refs/commands" = "src/commands.jsl"
+"@add-vanilla-refs/cli" = "src/cli.jsl"
 
 # Every module here is inert API: it does nothing until something requires it, and runs with the
 # authority of whatever calls it. `@add-vanilla-refs` never touches the filesystem: callers hand
@@ -33,7 +33,7 @@ id = "add-vanilla-refs.core"
 requires = ["tes3.core", "tes3conv.core"]
 exports = ["@add-vanilla-refs", "@add-vanilla-refs/commands", "@add-vanilla-refs/cli"]
 
-# The command line: `src/main.luau` hands its arguments to `@add-vanilla-refs/cli`. A run asks
+# The command line: `src/main.jsl` hands its arguments to `@add-vanilla-refs/cli`. A run asks
 # which folder it is in and reads Starwind.esp and the three masters from it (filesystem.read),
 # and writes Starwind.esp over the one it read (filesystem.write). It reads no environment, runs
 # no other program, and opens no connection.
@@ -41,5 +41,5 @@ exports = ["@add-vanilla-refs", "@add-vanilla-refs/commands", "@add-vanilla-refs
 [targets.add-vanilla-refs]
 kind = "command"
 command = "add-vanilla-refs"
-entry = "src/main.luau"
+entry = "src/main.jsl"
 capabilities = ["filesystem.read", "filesystem.write"]
