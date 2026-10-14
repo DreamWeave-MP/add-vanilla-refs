@@ -534,7 +534,7 @@ local function importFoundations(
 )
   for position, records in state.foundations do
     for _, record in records do
-      local set, id
+      local set: { [string]: boolean }, id: string
 
       if record.type == 'MagicEffect' then
         set, id = state.effects, tes3.string(record.effectId)
