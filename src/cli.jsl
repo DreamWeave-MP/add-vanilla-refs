@@ -1,5 +1,4 @@
 --!strict
---!native
 --[[
 @add-vanilla-refs/cli: addVanillaRefs's command line, over @add-vanilla-refs/commands.
 
