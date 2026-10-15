@@ -94,3 +94,41 @@ of the command's time is now `@tes3` and `@tes3conv` reading the files and writi
 package: Luau resizes the destination to exactly fit when a move runs past its end, so appending
 a list to a long one that way copies the long one every time. Adding the lines one at a time is
 the `b4fa7b6` row above.
+
+## Which modules are native, and why
+
+Jess compiles to machine code only what is marked (`--!native` on a module, `@native` on one
+function), and every load pays for what is marked. A module carries `--!native` when a row below
+spends its time there and the module is small (12 KB or less); a larger module carries `@native`
+on the functions the row spends its time in, and nothing else.
+
+Measured 2026-10-15 with `jess 0.1.0`, the verified release build of jess `07c38cb` on l3i
+2.0.3, on the i7-10870H, the one-minute load 1.49 and 1.04 at the start of the two
+sessions. In each session the bench ran alternately on this package and on a copy of it with
+every module marked, three fresh runs of `bench/bench.jsl` each, every run's row the median of
+its batches; a column is the median of the three, and a ratio is against the all-marked runs of
+the same session. Which functions a row spends its time in comes from `jess run --profile` of
+that row alone, unmarked. The load cost is a fresh `jess run --package <this package>
+--package-path jpk` of a script that only requires `@add-vanilla-refs`, the two sides alternating, the
+median of five each after one warm-up.
+
+| Requiring `@add-vanilla-refs` | All marked | This state |
+| --- | ---: | ---: |
+| Unmarked | 0.076 s | 0.061 s |
+| Final | 0.057 s | 0.055 s |
+
+| Row | All marked (ms) | Unmarked / all marked | Final (ms) | Final / all marked |
+| --- | ---: | ---: | ---: | ---: |
+| a plugin of 2523 records over masters of 22036: the whole run | 65.93 | **1.392×** | 67.64 | 1.026× |
+| a plugin of 4407 records over masters of 18799: objects alone | 45.74 | **1.414×** | 46.47 | 1.016× |
+| a plugin of 511 records over masters of 6424: cells of 512 references | 37.40 | **1.438×** | 37.63 | 1.006× |
+| a plugin of 1943 records over masters of 23565: dialogue | 37.52 | **1.569×** | 37.34 | 0.995× |
+| commands.run, a dry run: a plugin of 506 records over masters of 5364, as files | 53.66 | **1.118×** | 54.30 | 1.012× |
+
+What carries the directive: `init` and `commands`, whole. `cli` and `main` parse a command line
+once a run and are never marked.
+
+Marking only the functions of `init` the runs' profiles named saved 0.006 s a load and left every
+run 1.07x to 1.16x slower than all marked: a run reaches most of `init`, so the rest of it is no
+long tail to leave as bytecode. Whole, `init` costs 1.5 ms less a load than all marked and no row
+is more than 5% slower; a run of the tool is the work `init` does, so that is the state kept.
