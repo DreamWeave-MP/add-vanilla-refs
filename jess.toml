@@ -5,7 +5,7 @@ id = "org.dreamweave.add-vanilla-refs"
 version = "0.1.0"
 jess_api = "1"
 default_target = "add-vanilla-refs"
-include = ["src"]
+include = ["src", "tests"]
 tests = [
   "tests/run.jsl",
   "tests/log.jsl",
@@ -42,4 +42,4 @@ exports = ["@add-vanilla-refs", "@add-vanilla-refs/commands", "@add-vanilla-refs
 kind = "command"
 command = "add-vanilla-refs"
 entry = "src/main.jsl"
-capabilities = ["filesystem.read", "filesystem.write"]
+capabilities = ["filesystem.read", "filesystem.write", "process.stdio"]
