@@ -7,6 +7,7 @@
 local bytes = require '@dream/bytes'
 local cli = require '@add-vanilla-refs/cli'
 local commands = require '@add-vanilla-refs/commands'
+local fs = require '@dream/fs'
 local support = require './support'
 local test = require '@jess/test'
 
@@ -68,7 +69,9 @@ end
 suite.describe('parse', function()
   suite.it('reads no arguments as the whole command: addVanillaRefs\'s files in the current folder', function()
     local command, message = cli.parse {}
-    expect(command).toEqual { action = 'run', request = { folder = jess.fs.cwd() } }
+    local current, problem = fs.cwd()
+    if not current then error(problem, 0) end
+    expect(command).toEqual { action = 'run', request = { folder = current } }
     expect(message).toBeNil()
   end)
 
@@ -174,20 +177,25 @@ suite.describe('run', function()
     local written = support.bytes(paths['Starwind.esp'])
     expect(#written).toBe(#golden)
     expect(bytes.sha256(written)).toBe(bytes.sha256(golden))
-    expect(#jess.fs.list(folder)).toBe(4)
+    local listed, problem = fs.list(folder)
+    if not listed then error(problem, 0) end
+    expect(#listed).toBe(4)
   end)
 
   suite.it('returns 9 in a folder without the files, and makes nothing there', function()
     local folder = support.folder 'cli-empty'
     expect(cli.run({}, folder)).toBe(9)
-    expect(jess.fs.list(folder)).toEqual {}
+    local listed, problem = fs.list(folder)
+    if not listed then error(problem, 0) end
+    expect(listed).toEqual {}
   end)
 
   suite.it('returns 9 for a master that isn\'t a plugin, Starwind.esp as it was', function()
     local folder = support.folder 'cli-not-a-plugin'
     local paths = support.sources(folder)
     local before = support.bytes(paths['Starwind.esp'])
-    jess.fs.write(paths['Bloodmoon.esm'], 'not a plugin at all', { backup = false })
+    local done, problem = fs.writeFile(paths['Bloodmoon.esm'], 'not a plugin at all', { atomic = true, createParents = true })
+    if not done then error(problem, 0) end
 
     expect(cli.run({}, folder)).toBe(9)
     expect(support.bytes(paths['Starwind.esp']) == before).toBe(true)

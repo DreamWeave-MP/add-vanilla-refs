@@ -13,6 +13,7 @@ local addVanillaRefs = require '@add-vanilla-refs'
 local bytes = require '@dream/bytes'
 local commands = require '@add-vanilla-refs/commands'
 local core = require '@tes3'
+local fs = require '@dream/fs'
 local records = require '@tes3conv/records'
 local tes3conv = require '@tes3conv'
 
@@ -838,13 +839,15 @@ local Files: Shape = {
 }
 
 local files = world(Files, FileKinds, full)
-local folder = jess.fs.join(scratch, 'add-vanilla-refs-bench')
-jess.fs.createDir(folder)
+local folder = fs.join(scratch, 'add-vanilla-refs-bench')
+local done, problem = fs.mkdir(folder, { recursive = true })
+if not done then error(problem, 0) end
 
 local function write(name: string, list: Records)
   local built = tes3conv.plugin(list)
   built:updateRecordCount()
-  jess.fs.write(jess.fs.join(folder, name), built:save(), { backup = false })
+  local done, problem = fs.writeFile(fs.join(folder, name), built:save(), { atomic = true, createParents = true })
+  if not done then error(problem, 0) end
 end
 
 write(PluginName, files.plugin)

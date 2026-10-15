@@ -29,6 +29,7 @@ plugin), where addVanillaRefs exits 1. Messages go to standard error as
 ]]
 
 local commands = require '@add-vanilla-refs/commands'
+local fs = require '@dream/fs'
 local process = require '@dream/process'
 
 export type Command = {
@@ -76,7 +77,15 @@ local function parse(argv: { string }, folder: string?): (Command?, string?)
   local first = argv[1]
 
   if not first then
-    local request: commands.RunRequest = { folder = folder or jess.fs.cwd() }
+    local chosen = folder
+    if not chosen then
+      local current, problem = fs.cwd()
+      if not current then error(problem, 0) end
+
+      chosen = current
+    end
+
+    local request: commands.RunRequest = { folder = chosen }
     return { action = 'run' :: 'run', request = request }, nil
   end
 

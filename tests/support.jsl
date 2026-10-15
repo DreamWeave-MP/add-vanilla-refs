@@ -23,8 +23,8 @@ end
 --- A file addVanillaRefs wrote when it was run on `support.sources`' four files: `Starwind.esp`,
 --- the plugin it left, and `decoupleLog.txt`, what it printed.
 function support.golden(name: string): string
-  local path = jess.fs.join(tests(), 'golden', name)
-  local bytes = assert(jess.fs.read(path), `'{path}' isn't there`)
+  local path = fs.join(tests(), 'golden', name)
+  local bytes = (fs.readFileString(path) or error(`'{path}' isn't there`, 0))
   return bytes
 end
 
@@ -33,11 +33,15 @@ end
 function support.folder(name: string): string
   local scratch =
     assert(rawget(_G, 'scratchRoot') :: string?, 'the suite needs a host-owned scratchRoot')
-  local path = jess.fs.join(scratch, name)
+  local path = fs.join(scratch, name)
 
-  if jess.fs.exists(path) then assert(fs.remove(path, { recursive = true })) end
+  if fs.exists(path) then
+    local done, problem = fs.remove(path, { recursive = true })
+    if not done then error(problem, 0) end
+  end
 
-  jess.fs.createDir(path)
+  local done, problem = fs.mkdir(path, { recursive = true })
+  if not done then error(problem, 0) end
   return path
 end
 
@@ -97,18 +101,19 @@ end
 function support.write(path: string, records: { Record })
   local plugin = tes3conv.plugin(records)
   plugin:updateRecordCount()
-  jess.fs.write(path, plugin:save(), { backup = false })
+  local done, problem = fs.writeFile(path, plugin:save(), { atomic = true, createParents = true })
+  if not done then error(problem, 0) end
 end
 
 --- A plugin file's records, as `@tes3conv` reads them.
 function support.read(path: string): { Record }
-  local bytes = assert(jess.fs.readBuffer(path), `'{path}' isn't there`)
+  local bytes = (fs.readFile(path) or error(`'{path}' isn't there`, 0))
   return tes3conv.records(core.open(bytes))
 end
 
 --- A file's bytes, as a string two of which compare.
 function support.bytes(path: string): string
-  local bytes = assert(jess.fs.read(path), `'{path}' isn't there`)
+  local bytes = (fs.readFileString(path) or error(`'{path}' isn't there`, 0))
   return bytes
 end
 
@@ -210,7 +215,7 @@ function support.sources(folder: string, names: { [string]: string }?): { [strin
   local paths = {}
 
   for name, records in support.records() do
-    local path = jess.fs.join(folder, names and names[name] or name)
+    local path = fs.join(folder, names and names[name] or name)
     support.write(path, records)
     paths[name] = path
   end

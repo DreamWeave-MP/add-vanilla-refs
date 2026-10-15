@@ -6,6 +6,7 @@
 -- prints: the log is in the table the command returns.
 local bytes = require '@dream/bytes'
 local commands = require '@add-vanilla-refs/commands'
+local fs = require '@dream/fs'
 local support = require './support'
 local test = require '@jess/test'
 
@@ -80,7 +81,9 @@ suite.describe('run', function()
       expect(holds(paths[name], before[name])).toBe(true)
     end
 
-    expect(#jess.fs.list(folder)).toBe(4)
+    local listed, problem = fs.list(folder)
+    if not listed then error(problem, 0) end
+    expect(#listed).toBe(4)
   end)
 
   suite.it('takes each file\'s records in the file\'s order', function()
@@ -147,8 +150,9 @@ suite.describe('files named in the request', function()
   suite.it('takes the files it leaves out from the folder, under addVanillaRefs\'s names', function()
     local folder = support.folder 'commands-named-some'
     local paths = support.sources(folder)
-    local elsewhere = jess.fs.join(support.folder 'commands-named-elsewhere', 'Other.esp')
-    jess.fs.copy(paths[Plugin], elsewhere)
+    local elsewhere = fs.join(support.folder 'commands-named-elsewhere', 'Other.esp')
+    local done, problem = fs.copy(paths[Plugin], elsewhere)
+    if not done then error(problem, 0) end
     local before = support.bytes(paths[Plugin])
     local result = commands.run { folder = folder, plugin = elsewhere }
 
@@ -162,7 +166,7 @@ suite.describe('files named in the request', function()
     local folder = support.folder 'commands-output'
     local paths = support.sources(folder)
     local before = support.bytes(paths[Plugin])
-    local output = jess.fs.join(folder, 'Standalone.esp')
+    local output = fs.join(folder, 'Standalone.esp')
     local result = commands.run { folder = folder, output = output }
 
     expect(result.output).toBe(output)
@@ -187,7 +191,8 @@ suite.describe('files named in the request', function()
     local folder = support.folder 'commands-not-a-plugin'
     local paths = support.sources(folder)
     local before = support.bytes(paths[Plugin])
-    jess.fs.write(paths['Tribunal.esm'], 'not a plugin at all', { backup = false })
+    local done, problem = fs.writeFile(paths['Tribunal.esm'], 'not a plugin at all', { atomic = true, createParents = true })
+    if not done then error(problem, 0) end
 
     expect(function() commands.run { folder = folder } end).toThrow()
     expect(holds(paths[Plugin], before)).toBe(true)
@@ -199,8 +204,8 @@ suite.describe('files that aren\'t there', function()
     local folder = support.folder 'commands-missing'
     local paths = support.sources(folder)
     local before = support.bytes(paths[Plugin])
-    jess.fs.remove(paths['Tribunal.esm'])
-    jess.fs.remove(paths['Morrowind.esm'])
+    fs.remove(paths['Tribunal.esm'])
+    fs.remove(paths['Morrowind.esm'])
     local result = commands.run { folder = folder }
 
     expect(result.missing).toEqual { paths['Tribunal.esm'], paths['Morrowind.esm'] }
@@ -216,12 +221,14 @@ suite.describe('files that aren\'t there', function()
     local result = commands.run { folder = folder }
 
     expect(result.missing).toEqual {
-      jess.fs.join(folder, 'Starwind.esp'),
-      jess.fs.join(folder, 'Bloodmoon.esm'),
-      jess.fs.join(folder, 'Tribunal.esm'),
-      jess.fs.join(folder, 'Morrowind.esm'),
+      fs.join(folder, 'Starwind.esp'),
+      fs.join(folder, 'Bloodmoon.esm'),
+      fs.join(folder, 'Tribunal.esm'),
+      fs.join(folder, 'Morrowind.esm'),
     }
-    expect(jess.fs.list(folder)).toEqual {}
+    local listed, problem = fs.list(folder)
+    if not listed then error(problem, 0) end
+    expect(listed).toEqual {}
   end)
 end)
 
@@ -230,7 +237,7 @@ suite.describe('a dry run', function()
     local folder = support.folder 'commands-dry-run'
     local paths = support.sources(folder)
     local before = support.bytes(paths[Plugin])
-    local output = jess.fs.join(folder, 'Standalone.esp')
+    local output = fs.join(folder, 'Standalone.esp')
     local result = commands.run { folder = folder, output = output, dryRun = true }
 
     expect(result.dryRun).toBe(true)
@@ -238,7 +245,7 @@ suite.describe('a dry run', function()
     expect(result.output).toBe(output)
     expect(result.records).toEqual { plugin = 10, output = 24 }
     expect(result.log).toEqual(support.lines(support.golden 'decoupleLog.txt'))
-    expect(jess.fs.exists(output)).toBe(false)
+    expect(fs.exists(output)).toBe(false)
     expect(holds(paths[Plugin], before)).toBe(true)
   end)
 end)
