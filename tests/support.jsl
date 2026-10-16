@@ -6,6 +6,15 @@ local core = require '@tes3'
 local fs = require '@dream/fs'
 local tes3conv = require '@tes3conv'
 
+--- The text of the file at `path`, raising the read's own message when there is none.
+local function readText(path: string): string
+  local text, problem = fs.readFileString(path)
+  if not text then error(problem, 0) end
+
+  return text
+end
+
+
 export type Record = { [string | number]: any }
 
 local support = {}
@@ -24,7 +33,7 @@ end
 --- the plugin it left, and `decoupleLog.txt`, what it printed.
 function support.golden(name: string): string
   local path = fs.join(tests(), 'golden', name)
-  local bytes = (fs.readFileString(path) or error(`'{path}' isn't there`, 0))
+  local bytes = (readText(path) or error(`'{path}' isn't there`, 0))
   return bytes
 end
 
@@ -113,7 +122,7 @@ end
 
 --- A file's bytes, as a string two of which compare.
 function support.bytes(path: string): string
-  local bytes = (fs.readFileString(path) or error(`'{path}' isn't there`, 0))
+  local bytes = (readText(path) or error(`'{path}' isn't there`, 0))
   return bytes
 end
 
