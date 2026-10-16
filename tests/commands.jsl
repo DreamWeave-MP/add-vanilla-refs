@@ -245,7 +245,7 @@ suite.describe('a dry run', function()
     expect(result.output).toBe(output)
     expect(result.records).toEqual { plugin = 10, output = 24 }
     expect(result.log).toEqual(support.lines(support.golden 'decoupleLog.txt'))
-    expect(fs.exists(output)).toBe(false)
+    expect((fs.exists(output))).toBe(false)
     expect(holds(paths[Plugin], before)).toBe(true)
   end)
 end)
