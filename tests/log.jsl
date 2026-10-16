@@ -11,7 +11,8 @@ local suite = test.new()
 
 type Record = { [string | number]: any }
 
-local Names = { names = { 'Bloodmoon.esm', 'Tribunal.esm', 'Morrowind.esm' } }
+local Names: addVanillaRefs.Options =
+  { names = { 'Bloodmoon.esm', 'Tribunal.esm', 'Morrowind.esm' } }
 
 local function header(masters: { { string | number } }?): Record
   return {
@@ -337,7 +338,7 @@ suite.describe('log', function()
 
     -- The escort's cell isn't defined, so the second pass asks a copy of the pilot.
     expect(result[2] ~= pilot).toBe(true)
-    expect(result[2].aiPackages[2].cell).toBe 'igtestcell'
+    expect((result[2] :: Record).aiPackages[2].cell).toBe 'igtestcell'
     expect(log).toEqual {
       'lever added as an activation target',
       'Crate added to Starwind.esp as a cell reference in Hall',
@@ -515,7 +516,7 @@ suite.describe('records', function()
       'MiscItem:escort_target<|>',
     }
 
-    expect(result[2].aiPackages[1].cell).toBe 'igtestcell'
+    expect((result[2] :: Record).aiPackages[1].cell).toBe 'igtestcell'
     expect(result[6]).toBe(base[2])
   end)
 

@@ -76,7 +76,7 @@ suite.describe('parse', function()
   end)
 
   suite.it('takes the folder it is given in place of the current one', function()
-    expect(cli.parse({}, 'work')).toEqual { action = 'run', request = { folder = 'work' } }
+    expect((cli.parse({}, 'work'))).toEqual { action = 'run', request = { folder = 'work' } }
   end)
 
   suite.it('reads help under each spelling', function()

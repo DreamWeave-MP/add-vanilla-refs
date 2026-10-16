@@ -95,7 +95,8 @@ local function chain(records: { Record }): { string }
 end
 
 suite.describe('add-vanilla-refs', function()
-  local options = { names = { 'Bloodmoon.esm', 'Tribunal.esm', 'Morrowind.esm' } }
+  local options: addVanillaRefs.Options =
+    { names = { 'Bloodmoon.esm', 'Tribunal.esm', 'Morrowind.esm' } }
 
   local function run(plugin: { Record }, bases: { { Record } }): ({ Record }, { string })
     return addVanillaRefs.run(plugin, bases, options)

@@ -114,7 +114,7 @@ local function records(path: string, keep: ((tag: string) -> core.Keep)?): Recor
     table.insert(queue, position)
   end
 
-  local ordered: Records = table.create(#sorted)
+  local ordered = table.create(#sorted) :: Records
   local taken: { [string]: number } = {}
 
   for index = 0, plugin:count() - 1 do

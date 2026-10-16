@@ -259,17 +259,37 @@ local function add(pools: Pools, kind: string, id: string)
 end
 
 --- `count` things `held` by something: each a number and an id, as tes3conv has an inventory.
-local function inventory(held: { string }, count: number): { Value }
-  return [for _ in range(1, count) => { nextRandom() % 5 + 1, pick(held) }]
+local function inventory(held: { string }, count: number): Table
+  local items: Table = {}
+  for index = 1, count do
+    items[index] = { nextRandom() % 5 + 1, pick(held) }
+  end
+
+  return items
 end
 
-local function spells(pools: Pools, count: number): { Value }
-  return [for _ in range(1, count) => pick(pools.spells)]
+local function spells(pools: Pools, count: number): Table
+  local chosen: Table = {}
+  for index = 1, count do
+    chosen[index] = pick(pools.spells)
+  end
+
+  return chosen
+end
+
+--- Levels 1 to `top`, each a thing from `pool` and its level, as tes3conv has a leveled list.
+local function leveled(pool: { string }, top: number): Table
+  local entries: Table = {}
+  for level = 1, top do
+    entries[level] = { pick(pool), level }
+  end
+
+  return entries
 end
 
 --- An actor's packages: by turns one that follows, escorts, or (where `varied`) activates
 --- something, and none.
-local function packages(pools: Pools, varied: boolean): { Value }
+local function packages(pools: Pools, varied: boolean): Table
   local turn = nextRandom() % 4
 
   if turn == 3 then return {} end
@@ -362,10 +382,9 @@ local function object(kind: string, id: string, pools: Pools, varied: boolean): 
     record.aiPackages = packages(pools, varied)
     record.sound = maybe(pools.creatures, 2)
   elseif kind == 'LeveledItem' then
-    record.items = [for level in range(1, nextRandom() % 6 + 2) => { pick(pools.items), level }]
+    record.items = leveled(pools.items, nextRandom() % 6 + 2)
   elseif kind == 'LeveledCreature' then
-    record.creatures =
-      [for level in range(1, nextRandom() % 5 + 2) => { pick(pools.creatures), level }]
+    record.creatures = leveled(pools.creatures, nextRandom() % 5 + 2)
   elseif kind == 'Door' then
     record.script = maybe(pools.scripts, 8)
     record.openSound, record.closeSound = maybe(pools.sounds, 2), maybe(pools.sounds, 2)
@@ -436,26 +455,28 @@ end
 local function foundations(list: Records, pools: Pools, settings: number, varied: boolean)
   for index = 1, settings do
     local id = `sSetting{index}`
-    table.insert(
-      list,
+    local record: Record =
       { type = 'GameSetting', flags = '', id = id, value = { type = 'String', data = id } }
-    )
+    table.insert(list, record)
   end
 
   for index = 1, 10 do
     local id = `race {index}`
-    table.insert(list, { type = 'Race', flags = '', id = id, name = id, spells = spells(pools, 2) })
+    local record: Record =
+      { type = 'Race', flags = '', id = id, name = id, spells = spells(pools, 2) }
+    table.insert(list, record)
   end
 
   for index = 1, 20 do
     local id = `class {index}`
-    table.insert(list, { type = 'Class', flags = '', id = id, name = id })
+    local record: Record = { type = 'Class', flags = '', id = id, name = id }
+    table.insert(list, record)
   end
 
   if not varied then return end
 
   for index = 1, 48 do
-    table.insert(list, {
+    local record: Record = {
       type = 'MagicEffect',
       flags = '',
       effectId = `Effect{index}`,
@@ -467,7 +488,8 @@ local function foundations(list: Records, pools: Pools, settings: number, varied
       boltVisual = maybe(pools.statics, 2),
       hitVisual = pick(pools.statics),
       areaVisual = maybe(pools.statics, 2),
-    })
+    }
+    table.insert(list, record)
   end
 end
 
@@ -588,7 +610,9 @@ local function world(
 
     for index = position, shape.objects // 16, 2 do
       local id = string.upper(theirs[(index * 7919) % #theirs + 1])
-      table.insert(list, { type = 'MiscItem', flags = '', id = id, script = pick(pools.scripts) })
+      local record: Record =
+        { type = 'MiscItem', flags = '', id = id, script = pick(pools.scripts) }
+      table.insert(list, record)
     end
   end
 
@@ -616,12 +640,13 @@ local function world(
   if varied then
     for index = 1, 6 do
       local effect = `Effect{(index + 1) // 2}`
-      table.insert(plugin, { type = 'MagicEffect', flags = '', effectId = effect })
+      local record: Record = { type = 'MagicEffect', flags = '', effectId = effect }
+      table.insert(plugin, record)
     end
   end
 
   for index = 1, shape.cells do
-    local references: { Value } = {}
+    local references: Table = {}
 
     for place = 1, shape.references do
       local reference: Table = {
@@ -646,13 +671,14 @@ local function world(
       references[place] = reference
     end
 
-    table.insert(plugin, {
+    local record: Record = {
       type = 'Cell',
       flags = '',
       name = `Hangar {index}`,
       data = { flags = 'IS_INTERIOR', grid = { 0, 0 } },
       references = references,
-    })
+    }
+    table.insert(plugin, record)
   end
 
   for index = 1, shape.topics do
@@ -719,12 +745,13 @@ local function world(
       'end',
     }
 
-    table.insert(plugin, {
+    local record: Record = {
       type = 'Script',
       flags = '',
       id = `sw_topics_{index}`,
       text = table.concat(lines, '\n'),
-    })
+    }
+    table.insert(plugin, record)
   end
 
   local made: World = { plugin = plugin, bases = { bloodmoon, tribunal, morrowind } }
@@ -742,7 +769,7 @@ end
 
 --- A workload that runs `made`'s plugin over its masters.
 local function running(made: World): () -> Table
-  local options = { names = Names }
+  local options: addVanillaRefs.Options = { names = Names }
 
   return function()
     local decoupled, log = addVanillaRefs.run(made.plugin, made.bases, options)

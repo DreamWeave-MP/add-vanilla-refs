@@ -534,13 +534,9 @@ local function importFoundations(
 )
   for position, records in state.foundations do
     for _, record in records do
-      local set: { [string]: boolean }, id: string
-
-      if record.type == 'MagicEffect' then
-        set, id = state.effects, tes3.string(record.effectId)
-      else
-        set, id = state.defined, lower(tes3.editorId(record))
-      end
+      local effect = record.type == 'MagicEffect'
+      local set = if effect then state.effects else state.defined
+      local id = if effect then tes3.string(record.effectId) else lower(tes3.editorId(record))
 
       if set[id] then continue end
 
@@ -570,7 +566,9 @@ local function addRefs(state: State, includeDialogue: boolean, pass: string)
     enqueue(state, record, required, pending, pass)
   end
 
-  table.sort(pending, function(left, right) return left.id < right.id end)
+  table.sort(pending, function(left: Pending, right: Pending): boolean
+    return left.id < right.id
+  end)
 
   resolve(state, required, pending, pass)
   importFoundations(state, required, pending, pass)
@@ -1006,7 +1004,7 @@ local function decoupleDialogue(state: State)
   end
 
   table.sort(missing)
-  local materialized = {}
+  local materialized: { { topic: string, count: number, reasons: { string } } } = {}
 
   for _, topic in missing do
     local group = effective[topic]
@@ -1027,7 +1025,7 @@ local function decoupleDialogue(state: State)
       count += 1
     end
 
-    local names = {}
+    local names: { string } = {}
 
     for name in live[topic] do
       table.insert(names, ReasonNames[name])
@@ -1047,7 +1045,7 @@ local function decoupleDialogue(state: State)
     `Dialogue INFO audit: effective={counts.effective}, starwind_owned={counts.owned}, retained_vanilla={counts.retained}, pruned_vanilla={counts.pruned}`
   )
 
-  local reasonNames = {}
+  local reasonNames: { string } = {}
 
   for name in reasons do
     table.insert(reasonNames, name)
@@ -1060,7 +1058,9 @@ local function decoupleDialogue(state: State)
   end
 
   -- addVanillaRefs prints these from a BTreeMap, so in topic order.
-  table.sort(materialized, function(left, right) return left.topic < right.topic end)
+  table.sort(materialized, function(left: { topic: string }, right: { topic: string }): boolean
+    return left.topic < right.topic
+  end)
 
   for _, entry in materialized do
     local quoted = [for name in entry.reasons => `"{name}"`]
@@ -1095,7 +1095,7 @@ local function sanitizePackageCells(state: State)
 
     if copied then
       local copy = table.clone(record)
-      copy.aiPackages = copied
+      copy.aiPackages = copied :: Value
       state.plugin[index] = copy
     end
   end
@@ -1146,7 +1146,8 @@ function addVanillaRefs.run(
     if isDeleted(record) then continue end
 
     if record.type == 'MagicEffect' then
-      if any[for other in effects => tes3.equal(other, record)] then continue end
+      local known = any[for other in effects => tes3.equal(other, record)]
+      if known then continue end
 
       table.insert(effects, record)
     end
