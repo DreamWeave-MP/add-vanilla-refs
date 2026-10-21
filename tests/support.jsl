@@ -2,7 +2,7 @@
 -- What the command suites share: a Starwind.esp and its three Bethesda masters, small enough to
 -- read, written as plugin files into a folder of the scratch root that each case has to itself;
 -- and what addVanillaRefs itself made of those four files, kept in `golden`.
-local core = require '@tes3'
+local core = require '@esm'
 local fs = require '@dream/fs'
 local tes3conv = require '@tes3conv'
 

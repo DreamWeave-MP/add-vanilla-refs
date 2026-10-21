@@ -21,7 +21,7 @@ into Morrowind's topics, and scripts of a few dozen lines, some of which add a t
   some 20,000 INFOs across the masters, 10,701 in what comes out).
 - *commands.run, a dry run* writes a plugin of 506 records and masters of 5,364 (205 KB, and
   70 KB, 147 KB, and 623 KB) into the scratch folder once, and times the command over the files:
-  each read through `@tes3` and `@tes3conv` and put back in its file's order, the run, and the
+  each read through `@esm` and `@tes3conv` and put back in its file's order, the run, and the
   result written as a plugin in memory.
 
 Each workload is warmed up, sized to a batch of about a tenth of a second, and reported as the
@@ -43,7 +43,7 @@ Without a scratch folder the command isn't timed, and no capability is needed.
 - Machine: Intel Core i7-10870H @ 2.20 GHz, 16 threads, shared with other work while this ran.
 - Date: 2026-10-12.
 - Binary: the verified release build of Jess 0.1.0 on l3i 2.0.1 (Luau 0.742), the same one for
-  both sides, with the same `@tes3` and `@tes3conv` beside both.
+  both sides, with the same `@esm` and `@tes3conv` beside both.
 - Base: `fa3b211`, the package before the move, with the bench as it is now. Head: `3237943`.
 - Protocol: the whole bench run against base, then head, three times over, back to back under one
   lock; each cell is the median of its three runs. A difference under 5 percent is called no
@@ -88,7 +88,7 @@ record the cell needed, making a table of six pairs at each reference on the way
 a cell's size, in allocations. The rest are a run's two passes asking the same questions twice.
 What is left is mostly what a run has to make: a log line for every reference of every cell in
 both passes, a node for every INFO of every master, and a copy of every INFO it keeps. Most
-of the command's time is now `@tes3` and `@tes3conv` reading the files and writing the result.
+of the command's time is now `@esm` and `@tes3conv` reading the files and writing the result.
 
 `table.move(lines, 1, #lines, #log + 1, log)` is the one surprise worth knowing outside this
 package: Luau resizes the destination to exactly fit when a move runs past its end, so appending

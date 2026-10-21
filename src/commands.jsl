@@ -32,7 +32,7 @@ in. The port's differences from addVanillaRefs are @add-vanilla-refs's.
 ]]
 
 local addVanillaRefs = require '@add-vanilla-refs'
-local core = require '@tes3'
+local core = require '@esm'
 local fs = require '@dream/fs'
 local tes3 = require '@tes3conv/records'
 local tes3conv = require '@tes3conv'

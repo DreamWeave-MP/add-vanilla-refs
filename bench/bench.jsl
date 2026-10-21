@@ -12,7 +12,7 @@
 local addVanillaRefs = require '@add-vanilla-refs'
 local bytes = require '@dream/bytes'
 local commands = require '@add-vanilla-refs/commands'
-local core = require '@tes3'
+local core = require '@esm'
 local fs = require '@dream/fs'
 local records = require '@tes3conv/records'
 local tes3conv = require '@tes3conv'

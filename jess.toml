@@ -15,7 +15,7 @@ tests = [
 ]
 
 [dependencies]
-"org.dreamweave.tes3" = "0.1"
+"org.dreamweave.esm" = "0.1"
 "org.dreamweave.tes3conv" = "0.1"
 
 [modules]
@@ -30,7 +30,7 @@ tests = [
 
 [[layer]]
 id = "add-vanilla-refs.core"
-requires = ["tes3.core", "tes3conv.core"]
+requires = ["esm.core", "tes3conv.core"]
 exports = ["@add-vanilla-refs", "@add-vanilla-refs/commands", "@add-vanilla-refs/cli"]
 
 # The command line: `src/main.jsl` hands its arguments to `@add-vanilla-refs/cli`. A run asks
