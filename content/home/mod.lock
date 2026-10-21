@@ -1,0 +1,52 @@
+{
+  "schema_version": "3",
+  "document": "lock",
+  "project": "6f2d395b-2cc9-4bc7-9ba9-d1e73d0dadb6",
+  "note": "Written by CI when a release tag is pushed: what each published release's archive contains. Do not edit.",
+  "releases": [
+    {
+      "version": "0.1.0",
+      "locked_from": "5f36886d2bcaf49254dc7d83645c4d4d115043e0",
+      "artifacts": [
+        {
+          "id": "jpk",
+          "format": "jpk",
+          "filename": "org.dreamweave.add-vanilla-refs-0.1.0.jpk",
+          "media_type": "application/vnd.jess.jpk",
+          "size": 44069,
+          "digests": {
+            "sha256": "6444d6642c586aac6e17487f398fbad1a7e43850874249eb76a29bf2ae7c326a"
+          },
+          "jess": {
+            "package": "org.dreamweave.add-vanilla-refs",
+            "jess_api": "1",
+            "content_digest": "006152b77fae4504825573ede68c6520d2f8e691cd48b0cd595e99c49a0bb9a5",
+            "dependencies": {
+              "org.dreamweave.esm": "0.1",
+              "org.dreamweave.tes3conv": "0.1"
+            }
+          }
+        }
+      ],
+      "runtimes": {},
+      "platforms": [],
+      "provides": [],
+      "relationships": [],
+      "components": [
+        {
+          "id": "main",
+          "name": "add-vanilla-refs",
+          "path": ".",
+          "required": true,
+          "default": true,
+          "requires": [],
+          "conflicts": [],
+          "suggested_with": []
+        }
+      ],
+      "groups": [],
+      "extensions": {},
+      "critical_extensions": []
+    }
+  ]
+}
